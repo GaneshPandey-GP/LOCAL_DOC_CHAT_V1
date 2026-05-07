@@ -1,0 +1,143 @@
+# ============================================================================
+# DocChat - Production docker-compose
+# ============================================================================
+# Services: mongodb, backend (FastAPI), frontend (nginx-served React bundle)
+#
+# Usage:
+#   cp .env.example .env            # edit secrets / API keys
+#   docker compose up -d --build
+#
+# Data that MUST survive container restarts:
+#   • mongo_data      -> MongoDB databases
+#   • backend_uploads -> user-uploaded source documents
+#   • backend_chroma  -> ChromaDB vector index (embeddings, RAG state)
+# ============================================================================
+
+services:
+  # --------------------------------------------------------------------------
+  # MongoDB
+  # --------------------------------------------------------------------------
+  mongodb:
+    image: mongo:7.0
+    container_name: docchat-mongodb
+    restart: unless-stopped
+    # NOTE: port not published in prod by default — backend talks over the
+    # internal network only. Uncomment to expose to host for tooling.
+    # ports:
+    #   - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE:      ${DB_NAME}
+    volumes:
+      - mongo_data:/data/db
+      - mongo_config:/data/configdb
+    networks:
+      - docchat-net
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # --------------------------------------------------------------------------
+  # Backend (FastAPI + RAG pipeline)
+  # --------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: docchat-backend
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    environment:
+      # --- Database (built from compose secrets) ----------------------------
+      MONGO_URL: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongodb:27017/${DB_NAME}?authSource=admin
+      DB_NAME:   ${DB_NAME}
+      # --- CORS / security --------------------------------------------------
+      CORS_ORIGINS:        ${CORS_ORIGINS}
+      JWT_SECRET:          ${JWT_SECRET}
+      SHARE_TOKEN_SECRET:  ${SHARE_TOKEN_SECRET}
+      # --- Storage paths (mounted as volumes below) -------------------------
+      UPLOAD_DIR: /app/backend/uploads
+      CHROMA_DIR: /app/backend/chroma_db
+      # --- Providers --------------------------------------------------------
+      LLM_PROVIDER:         ${LLM_PROVIDER:-emergent}
+      EMBEDDING_PROVIDER:   ${EMBEDDING_PROVIDER:-local}
+      LLM_MODEL:            ${LLM_MODEL:-}
+      EMBEDDING_MODEL:      ${EMBEDDING_MODEL:-}
+      EMERGENT_LLM_KEY:     ${EMERGENT_LLM_KEY:-}
+      EMERGENT_BASE_URL:    ${EMERGENT_BASE_URL:-https://integrations.emergentagent.com/llm}
+      OPENROUTER_API_KEY:   ${OPENROUTER_API_KEY:-}
+      OPENROUTER_BASE_URL:  ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      OPENAI_API_KEY:       ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY:    ${ANTHROPIC_API_KEY:-}
+      # --- Runtime ----------------------------------------------------------
+      WEB_CONCURRENCY:      ${WEB_CONCURRENCY:-2}
+    volumes:
+      # Persist uploaded source documents (owner/editor workflow, share links)
+      - backend_uploads:/app/backend/uploads
+      # Persist ChromaDB vector index (embeddings, RAG retrieval state)
+      - backend_chroma:/app/backend/chroma_db
+    networks:
+      - docchat-net
+    # Internal only — frontend/nginx proxies /api to this service.
+    # Uncomment to expose the API directly on the host.
+    # ports:
+    #   - "8001:8001"
+    expose:
+      - "8001"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # --------------------------------------------------------------------------
+  # Frontend (React build served by nginx)
+  # --------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL}
+    container_name: docchat-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    networks:
+      - docchat-net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+# ----------------------------------------------------------------------------
+# Persistent volumes
+# ----------------------------------------------------------------------------
+volumes:
+  mongo_data:
+    driver: local
+  mongo_config:
+    driver: local
+  backend_uploads:
+    driver: local
+  backend_chroma:
+    driver: local
+
+# ----------------------------------------------------------------------------
+# Internal network — backend reaches mongo at host "mongodb"
+# ----------------------------------------------------------------------------
+networks:
+  docchat-net:
+    driver: bridge

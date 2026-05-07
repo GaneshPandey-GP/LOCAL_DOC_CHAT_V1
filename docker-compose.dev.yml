@@ -1,0 +1,60 @@
+# ============================================================================
+# DocChat - Development docker-compose (hot-reload)
+# ============================================================================
+# Merge on top of base file:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+#
+# Overrides:
+#   • backend  -> Dockerfile.dev  (uvicorn --reload, source bind-mounted)
+#   • frontend -> Dockerfile.dev  (CRA dev server, source bind-mounted)
+#   • mongodb  -> port published on host (27017) for local tooling
+#   • REACT_APP_BACKEND_URL defaults to http://localhost:8001 for local dev
+# ============================================================================
+
+services:
+  mongodb:
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "${BACKEND_PORT:-8001}:8001"
+    volumes:
+      # Hot-reload: mount source on top of image's /app/backend
+      - ./backend:/app/backend
+      # Keep persistent state on named volumes (not host-mounted over source)
+      - backend_uploads:/app/backend/uploads
+      - backend_chroma:/app/backend/chroma_db
+      # Prevent host __pycache__ from leaking into container
+      - /app/backend/__pycache__
+    environment:
+      # Dev defaults (override in .env if needed)
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+    command: ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8001", "--reload", "--reload-dir", "/app/backend"]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+      # In dev, REACT_APP_BACKEND_URL is read from env at runtime by CRA
+    environment:
+      REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL:-http://localhost:8001}
+      WDS_SOCKET_PORT:       ${WDS_SOCKET_PORT:-0}
+      ENABLE_HEALTH_CHECK:   "false"
+      CHOKIDAR_USEPOLLING:   "true"
+      WATCHPACK_POLLING:     "true"
+    volumes:
+      - ./frontend:/app/frontend
+      # Preserve container-built node_modules (avoids host/container arch mismatch)
+      - frontend_node_modules:/app/frontend/node_modules
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    command: ["yarn", "start"]
+
+volumes:
+  frontend_node_modules:
+    driver: local
