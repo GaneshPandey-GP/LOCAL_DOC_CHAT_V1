@@ -40,28 +40,15 @@ function SessionList({ current, onPick, refreshKey, onDeleted }) {
     };
 
     return (
-        /*
-         * PANEL 2 — SESSION LIST
-         * h-full fills the grid cell (which is 100vh via AppLayout's h-screen grid).
-         * The header ("New chat" button) is flex-shrink-0 — never moves.
-         * Only the inner <div> (the list) gets overflow-auto and scrolls.
-         */
-        <div className="h-full flex flex-col overflow-hidden">
-            {/* Panel 2 header — fixed, never scrolls */}
-            <div className="p-3 border-b border-border flex-shrink-0">
+        <div className="h-full flex flex-col">
+            <div className="p-3 border-b border-border">
                 <Link to="/app/chat">
                     <Button variant="outline" className="w-full justify-start h-10" data-testid="new-chat-button">
                         <Plus size={16} /> New chat
                     </Button>
                 </Link>
             </div>
-
-            {/*
-             * FIX: only THIS div scrolls for Panel 2.
-             * min-h-0 is critical — without it a flex child won't shrink
-             * below its content size and overflow-auto won't trigger.
-             */}
-            <div className="flex-1 overflow-y-auto min-h-0">
+            <div className="flex-1 overflow-auto">
                 {sessions.length === 0 && (
                     <div className="p-4 text-xs text-muted-foreground">No sessions yet.</div>
                 )}
@@ -132,29 +119,34 @@ export default function Chat() {
     const [docCount, setDocCount] = useState(0);
     const bottomRef = useRef(null);
 
+    // Load docs count
     useEffect(() => {
         api.get("/v2/documents").then((r) => setDocCount(r.data.filter((d) => d.status === "ready").length)).catch(() => {});
     }, []);
 
+    // Load messages when session changes
     useEffect(() => {
         setSessionId(routeSessionId || null);
         if (routeSessionId) {
             api.get(`/v2/sessions/${routeSessionId}/messages`).then((r) => {
                 setMessages(r.data.messages || []);
+                // Restore the original document scope so retrieval stays
+                // bound to the same documents the user originally selected.
                 const scope = r.data?.session?.scope_doc_ids;
                 if (Array.isArray(scope)) {
                     setDocIds(scope.length > 0 ? scope : []);
                 } else if (scope === null || scope === undefined) {
-                    setDocIds(null);
+                    setDocIds(null); // null/undefined => "all accessible"
                 }
             }).catch(() => nav("/app/chat"));
         } else {
             setMessages([]);
+            // New chat: respect URL ?docs=… if present, otherwise null=all
             const d = searchParams.get("docs");
             setDocIds(d ? d.split(",") : null);
         }
         setFollowups([]);
-    }, [routeSessionId, nav, searchParams]);
+    }, [routeSessionId,nav,searchParams]);
 
     useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, streaming]);
 
@@ -265,43 +257,13 @@ export default function Chat() {
     const pickSession = (id) => nav(`/app/chat/${id}`);
 
     return (
-        /*
-         * PANEL 2 + PANEL 3 container.
-         *
-         * FIX 1: h-screen  →  h-full
-         *   Chat lives inside AppLayout's <main className="overflow-hidden min-h-0">.
-         *   AppLayout's root is already h-screen, so h-full here means
-         *   "fill the 100vh cell AppLayout gave me" — no double viewport stacking.
-         *   Using h-screen inside an overflow-hidden parent created a second
-         *   100vh context that escaped containment.
-         */
-        <div className="h-full grid grid-cols-[260px_1fr] overflow-hidden">
-
-            {/*
-             * PANEL 2 — SESSION LIST SIDEBAR
-             * overflow-hidden on the aside itself; SessionList manages
-             * its own internal scroll via the inner list div.
-             */}
-            <aside className="border-r border-border overflow-hidden">
-                <SessionList
-                    current={sessionId}
-                    onPick={pickSession}
-                    refreshKey={sessionsRefresh}
-                    onDeleted={(id) => { if (id === sessionId) nav("/app/chat"); }}
-                />
+        <div className="h-screen grid grid-cols-[260px_1fr]">
+            <aside className="border-r border-border">
+                <SessionList current={sessionId} onPick={pickSession} refreshKey={sessionsRefresh} onDeleted={(id) => { if (id === sessionId) nav("/app/chat"); }} />
             </aside>
 
-            {/*
-             * PANEL 3 — MAIN CHAT COLUMN
-             *
-             * FIX 2: h-screen  →  h-full
-             *   Same reason as above — h-full fills the grid cell correctly.
-             *   overflow-hidden ensures nothing leaks out of this column.
-             */}
-            <div className="flex flex-col h-full overflow-hidden">
-
-                {/* Panel 3 header — flex-shrink-0, always visible, never scrolls */}
-                <header className="h-16 border-b border-border px-6 flex items-center justify-between flex-shrink-0">
+            <div className="flex flex-col h-screen">
+                <header className="h-16 border-b border-border px-6 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <ChatCircle size={22} weight="duotone" className="text-brand-primary" />
                         <div>
@@ -313,14 +275,7 @@ export default function Chat() {
                     </div>
                 </header>
 
-                {/*
-                 * ✅ ONLY THIS DIV SCROLLS for Panel 3.
-                 * flex-1 takes all remaining vertical space between header and input bar.
-                 * overflow-y-auto scrolls when content overflows.
-                 * min-h-0 lets flex shrink it below its content size.
-                 * Scrolling here does NOT affect Panel 1 or Panel 2.
-                 */}
-                <div className="flex-1 overflow-y-auto min-h-0 px-6 md:px-10 py-8">
+                <div className="flex-1 overflow-auto px-6 md:px-10 py-8">
                     <div className="max-w-3xl mx-auto space-y-6">
                         {messages.length === 0 && (
                             <div className="text-center py-16" data-testid="chat-empty-state">
@@ -448,8 +403,7 @@ export default function Chat() {
                     </div>
                 </div>
 
-                {/* Input bar — flex-shrink-0, always pinned to bottom of Panel 3 */}
-                <div className="border-t border-border p-4 flex-shrink-0">
+                <div className="border-t border-border p-4">
                     <form
                         onSubmit={(e) => { e.preventDefault(); send(); }}
                         className="max-w-3xl mx-auto flex items-end gap-2"
@@ -481,4 +435,3 @@ export default function Chat() {
         </div>
     );
 }
-

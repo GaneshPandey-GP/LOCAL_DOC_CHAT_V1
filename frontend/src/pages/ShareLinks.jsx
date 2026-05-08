@@ -191,14 +191,48 @@ export default function ShareLinks() {
 
     useEffect(() => { load(); }, []);
 
-    const copy = (t) => {
-        const url = `${window.location.origin}/share/${t}`;
-        navigator.clipboard.writeText(url);
+    //const copy = (t) => {
+    //    const url = `${window.location.origin}/share/${t}`;
+    //    navigator.clipboard.writeText(url);
+    //    setCopied(t);
+    //    toast.success("Copied share URL");
+    //    setTimeout(() => setCopied(null), 2000);
+    //};
+const copy = async (t) => {
+    const url = `${window.location.origin}/share/${t}`;
+
+    const onSuccess = () => {
         setCopied(t);
         toast.success("Copied share URL");
         setTimeout(() => setCopied(null), 2000);
     };
 
+    // Primary: modern Clipboard API
+    if (navigator.clipboard?.writeText) {
+        try {
+            await navigator.clipboard.writeText(url);
+            onSuccess();
+            return;
+        } catch {
+            // fall through to legacy method
+        }
+    }
+
+    // Fallback: execCommand (works in non-https / older browsers)
+    try {
+        const el = document.createElement("textarea");
+        el.value = url;
+        el.style.cssText = "position:fixed;opacity:0;pointer-events:none;";
+        document.body.appendChild(el);
+        el.focus();
+        el.select();
+        const ok = document.execCommand("copy");
+        document.body.removeChild(el);
+        if (ok) { onSuccess(); } else { throw new Error(); }
+    } catch {
+        toast.error("Copy failed — please copy the URL manually");
+    }
+};
     const revoke = async (t) => {
         if (!window.confirm("Revoke this link? Active guests will lose access immediately.")) return;
         try {

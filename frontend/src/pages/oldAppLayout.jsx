@@ -11,6 +11,7 @@ import {
     UsersThree,
     Gear,
     SignOut,
+    CaretRight,
     Code,
     ToggleRight,
     ClockCounterClockwise,
@@ -42,22 +43,9 @@ export default function AppLayout() {
     const isAdmin = user?.role === "owner";
 
     return (
-        /*
-         * FIX 1: min-h-screen  →  h-screen overflow-hidden
-         *   - Locks the root to exactly the viewport height.
-         *   - overflow-hidden kills any possibility of page-level scroll.
-         */
-        <div className="h-screen overflow-hidden grid grid-cols-[260px_1fr]">
-
-            {/*
-             * PANEL 1 — LEFT SIDEBAR
-             * The aside stretches to the grid row height (100vh) automatically.
-             * overflow-hidden on the aside itself guarantees it never scrolls.
-             */}
-            <aside className="border-r border-border bg-background flex flex-col overflow-hidden">
-
-                {/* Brand header — flex-shrink-0 so it never gets squished */}
-                <div className="h-16 border-b border-border flex items-center px-5 flex-shrink-0">
+        <div className="min-h-screen grid grid-cols-[260px_1fr]">
+            <aside className="border-r border-border bg-background flex flex-col">
+                <div className="h-16 border-b border-border flex items-center px-5">
                     <Link to="/app" className="flex items-center gap-2" data-testid="sidebar-brand">
                         <div className="w-7 h-7 bg-brand-primary grid place-items-center">
                             <span className="text-white font-heading font-black text-sm">D</span>
@@ -66,13 +54,7 @@ export default function AppLayout() {
                     </Link>
                 </div>
 
-                {/*
-                 * FIX 2: removed overflow-y-auto from <nav>
-                 *   - Sidebar nav MUST NOT scroll per requirements.
-                 *   - overflow-hidden + min-h-0 lets flex shrink correctly
-                 *     without ever producing a scrollbar.
-                 */}
-                <nav className="flex-1 py-4 overflow-hidden min-h-0">
+                <nav className="flex-1 py-4 overflow-y-auto">
                     <div className="dc-overline px-5 mb-2">Workspace</div>
                     <NavItem to="/app" end icon={FileText} label="Documents" testId="nav-documents" />
                     <NavItem to="/app/chat" icon={ChatCircleDots} label="Chat" testId="nav-chat" />
@@ -94,8 +76,7 @@ export default function AppLayout() {
                     <NavItem to="/app/settings" icon={Gear} label="Settings" testId="nav-settings" />
                 </nav>
 
-                {/* User row — flex-shrink-0 so it's always visible at the bottom */}
-                <div className="border-t border-border p-4 flex-shrink-0">
+                <div className="border-t border-border p-4">
                     <div className="flex items-center gap-3">
                         <div className="w-9 h-9 bg-brand-primary grid place-items-center text-white font-heading font-bold text-sm">
                             {(user?.name || "?").charAt(0).toUpperCase()}
@@ -117,18 +98,9 @@ export default function AppLayout() {
                 </div>
             </aside>
 
-            {/*
-             * FIX 3: overflow-auto  →  overflow-hidden min-h-0
-             *   - Chat.jsx manages its own internal scroll entirely.
-             *   - If <main> kept overflow-auto, Chat's h-full would have
-             *     nothing to clamp against and the page would grow freely.
-             *   - min-h-0 is required on flex/grid children so they can
-             *     shrink below their content size.
-             */}
-            <main className="overflow-auto min-h-0">
+            <main className="overflow-auto">
                 <Outlet />
             </main>
         </div>
     );
 }
-
