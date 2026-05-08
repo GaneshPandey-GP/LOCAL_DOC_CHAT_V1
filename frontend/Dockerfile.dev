@@ -1,0 +1,29 @@
+# ============================================================================
+# DocChat Frontend - Development Dockerfile (CRA dev server + hot-reload)
+# ============================================================================
+# Source is bind-mounted by docker-compose.dev.yml; node_modules stays in a
+# named volume so host/container arch differences don't collide.
+# ============================================================================
+
+FROM node:20-bookworm-slim
+
+ENV CI=true \
+    NODE_OPTIONS=--max-old-space-size=4096 \
+    WATCHPACK_POLLING=true \
+    CHOKIDAR_USEPOLLING=true \
+    WDS_SOCKET_HOST=0.0.0.0
+
+WORKDIR /app/frontend
+
+COPY package.json yarn.lock* ./
+RUN corepack enable \
+ && yarn install --frozen-lockfile --network-timeout 600000
+
+COPY . .
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+    CMD wget --spider -q http://localhost:3000/ || exit 1
+
+CMD ["yarn", "start"]

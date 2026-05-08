@@ -1,0 +1,36 @@
+# Dependencies (rebuilt inside container)
+node_modules/
+yarn-error.log
+npm-debug.log
+pnpm-debug.log
+
+# Build artifacts
+build/
+dist/
+.cache/
+coverage/
+
+# Env files (inject via build args / compose instead)
+.env
+.env.*
+!.env.example
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Git / CI
+.git/
+.gitignore
+.github/
+
+# Docs not needed at runtime
+*.md
+!README.md
+
+# Docker artifacts
+Dockerfile*
+.dockerignore
+docker-compose*.yml
