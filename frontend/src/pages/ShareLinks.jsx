@@ -431,7 +431,8 @@ const copy = async (t) => {
                                         {l.revoked && <Badge variant="destructive" className="text-[10px] font-mono">REVOKED</Badge>}
                                         {!l.revoked && expired && <Badge variant="secondary" className="text-[10px] font-mono">EXPIRED</Badge>}
                                         {!l.revoked && !expired && l.single_use && l.opens > 0 && <Badge variant="secondary" className="text-[10px] font-mono">USED</Badge>}
-                                        {!dead && <Badge className="text-[10px] font-mono bg-confidence-high">ACTIVE</Badge>}
+                                     
+				    {!dead && <Badge className="text-[10px] font-mono bg-green-600 hover:bg-green-600 text-white border-transparent">ACTIVE</Badge>}
                                     </div>
                                     <div className="flex gap-1">
                                         <Button size="sm" variant="outline" onClick={() => copy(l.token)} data-testid={`copy-share-${l.token}`} disabled={dead}>

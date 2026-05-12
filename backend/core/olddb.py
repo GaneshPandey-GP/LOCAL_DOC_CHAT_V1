@@ -23,9 +23,6 @@ embed_widgets = db.embed_widgets
 widget_sessions = db.widget_sessions
 widget_events = db.widget_events
 
-# Model configurations (stored in DB, not .env)
-model_configs = db.model_configs
-
 
 async def init_indexes():
     """Create indexes for common queries."""
@@ -45,6 +42,3 @@ async def init_indexes():
     await widget_sessions.create_index([("widget_id", 1), ("visitor_id", 1)])
     await widget_events.create_index([("widget_id", 1), ("event_type", 1), ("created_at", -1)])
     await widget_events.create_index([("widget_id", 1), ("visitor_id", 1), ("event_type", 1), ("created_at", -1)])
-    # Model configs
-    await model_configs.create_index("id", unique=True)
-    await model_configs.create_index([("model_type", 1), ("is_active", 1)])

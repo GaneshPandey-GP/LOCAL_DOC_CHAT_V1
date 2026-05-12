@@ -52,12 +52,38 @@ const DEFAULT_CFG = {
 // ─── Copy-to-clipboard button ─────────────────────────────────────────────────
 function CopyBtn({ text, className = "" }) {
     const [done, setDone] = useState(false);
-    const copy = () => {
+   /* const copy = () => {
         navigator.clipboard.writeText(text);
         setDone(true);
         toast.success("Copied to clipboard");
         setTimeout(() => setDone(false), 2000);
-    };
+    };*/
+
+
+	const copy = () => {
+    try {
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text);
+        } else {
+            // Fallback for HTTP / iframes / older browsers
+            const el = document.createElement("textarea");
+            el.value = text;
+            el.style.position = "fixed";
+            el.style.opacity = "0";
+            document.body.appendChild(el);
+            el.focus();
+            el.select();
+            document.execCommand("copy");
+            document.body.removeChild(el);
+        }
+        setDone(true);
+        toast.success("Copied to clipboard");
+        setTimeout(() => setDone(false), 2000);
+    } catch (err) {
+        console.error("Copy failed:", err);
+        toast.error("Failed to copy");
+    }
+};
     return (
         <Button size="sm" variant="outline" onClick={copy} className={className}>
             {done ? <Check size={14} /> : <Copy size={14} />}

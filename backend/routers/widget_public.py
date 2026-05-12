@@ -366,7 +366,7 @@ async def _log_w(widget_id: str, session_id: Optional[str], visitor_id: str, eve
 # HTML / JS builders
 # ---------------------------------------------------------------------------
 
-def _build_loader_js(base_url: str) -> str:
+'''def _build_loader_js(base_url: str) -> str:
     return (
         "(function(){"
         "'use strict';"
@@ -424,6 +424,111 @@ def _build_loader_js(base_url: str) -> str:
         "}).catch(function(){});"
         "})();"
     )
+'''
+
+
+
+def _build_loader_js(base_url: str) -> str:
+    return (
+        "(function(){"
+        "'use strict';"
+        "var cfg=window.DochatConfig||{};"
+        "var wid=cfg.widgetId;"
+        "if(!wid){console.warn('[DocChat] widgetId missing');return;}"
+
+        "var base=cfg.baseUrl||'" + base_url + "';"
+        "var pos=cfg.position||'bottom-right';"
+
+        "var right=pos==='bottom-left'?'auto':'24px';"
+        "var left=pos==='bottom-left'?'24px':'auto';"
+
+        # Container
+        "var container=document.createElement('div');"
+        "container.id='dc-container';"
+        "container.style.cssText='position:fixed;bottom:24px;right:'+right+';left:'+left+';z-index:999999;font-family:Inter,sans-serif;';"
+
+        # Chat Button
+        "var btn=document.createElement('button');"
+        "btn.id='dc-btn';"
+        "btn.style.cssText='width:62px;height:62px;border:none;border-radius:20px;background:linear-gradient(135deg,#2563EB,#4F46E5);color:#fff;cursor:pointer;box-shadow:0 10px 30px rgba(37,99,235,.35);display:flex;align-items:center;justify-content:center;transition:all .25s ease;';"
+
+        "btn.onmouseenter=function(){btn.style.transform='translateY(-3px) scale(1.03)'};"
+        "btn.onmouseleave=function(){btn.style.transform='translateY(0) scale(1)'};"
+
+        "btn.innerHTML='"
+        "<svg width=\"26\" height=\"26\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\">"
+        "<path d=\"M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z\"></path>"
+        "</svg>';"
+
+
+        # Panel
+        "var panel=document.createElement('div');"
+        "panel.id='dc-panel';"
+
+        "panel.style.cssText='display:none;position:absolute;bottom:78px;right:0;width:380px;height:650px;background:#fff;border-radius:24px;overflow:hidden;border:1px solid rgba(0,0,0,.08);box-shadow:0 25px 80px rgba(0,0,0,.25);opacity:0;transform:translateY(12px) scale(.98);transition:all .25s ease;';"
+
+        # Mobile
+        "if(window.innerWidth<520){"
+        "panel.style.width='calc(100vw - 24px)';"
+        "panel.style.height='calc(100vh - 110px)';"
+        "panel.style.right='-8px';"
+        "}"
+
+        # Iframe
+        "var iframe=document.createElement('iframe');"
+        "iframe.src=base+'/api/widget/'+wid+'/iframe';"
+        "iframe.allow='clipboard-write';"
+        "iframe.setAttribute('title','DocChat');"
+        "iframe.style.cssText='width:100%;height:100%;border:none;background:#fff;';"
+
+        "panel.appendChild(iframe);"
+
+        # Open/Close
+        "var open=false;"
+
+        "btn.onclick=function(){"
+        "open=!open;"
+
+        "if(open){"
+        "panel.style.display='block';"
+
+        "setTimeout(function(){"
+        "panel.style.opacity='1';"
+        "panel.style.transform='translateY(0) scale(1)';"
+        "},10);"
+
+        "}else{"
+
+        "panel.style.opacity='0';"
+        "panel.style.transform='translateY(12px) scale(.98)';"
+
+        "setTimeout(function(){"
+        "panel.style.display='none';"
+        "},250);"
+        "}"
+
+        "};"
+
+        "container.appendChild(panel);"
+        "container.appendChild(btn);"
+        "document.body.appendChild(container);"
+
+        # Branding Config
+        "fetch(base+'/api/widget/'+wid+'/config')"
+        ".then(function(r){return r.json()})"
+        ".then(function(d){"
+
+        "var c=d.config||{};"
+
+        "if(c.brand_color){"
+        "btn.style.background='linear-gradient(135deg,'+c.brand_color+',#4F46E5)';"
+        "}"
+
+        "})"
+        ".catch(function(){});"
+
+        "})();"
+    )
 
 
 def _unavailable_html() -> str:
@@ -434,7 +539,6 @@ def _unavailable_html() -> str:
   <div style="font-size:15px;font-weight:600;margin-bottom:4px">Widget Unavailable</div>
   <div style="font-size:13px">This chat widget is not authorized on this domain.</div>
 </div></body></html>"""
-
 
 def _build_widget_html(widget: dict) -> str:
     cfg = widget.get("config", {})
@@ -545,6 +649,9 @@ a{{color:{brand_color}}}
         "</body></html>"
     )
     return html
+
+
+
 
 
 # ---------------------------------------------------------------------------
