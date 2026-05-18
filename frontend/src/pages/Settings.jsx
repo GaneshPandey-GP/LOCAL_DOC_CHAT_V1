@@ -185,8 +185,8 @@ function ModelModal({ open, onClose, editModel, onSaved }) {
         is_active: form.is_active,
         notes: form.notes || null,
       };
-      if (form.api_key.trim()) payload.api_key = form.api_key.trim();
-      if (form.api_base_url.trim()) payload.api_base_url = form.api_base_url.trim();
+      if (form.api_key && form.api_key.trim()) payload.api_key = form.api_key.trim();
+      if (form.api_base_url && form.api_base_url.trim()) payload.api_base_url = form.api_base_url.trim();
 
       let result;
       if (isEdit) {
@@ -501,7 +501,7 @@ export default function Settings() {
   const [activating, setActivating] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
-  const isOwner = user?.role === "owner";
+  const isOwner = user?.role === "admin";
 
   const loadModels = useCallback(async () => {
     try {

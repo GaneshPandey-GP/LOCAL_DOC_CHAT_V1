@@ -39,7 +39,7 @@ function NavItem({ to, end, icon: Icon, label, testId }) {
 export default function AppLayout() {
     const { user, logout } = useAuth();
     const nav = useNavigate();
-    const isAdmin = user?.role === "owner";
+    const isAdmin = user?.role === "admin";
 
     return (
         /*

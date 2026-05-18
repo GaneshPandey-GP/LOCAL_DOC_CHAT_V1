@@ -6,7 +6,7 @@ from fastapi import Depends, Header, HTTPException, status
 from .db import users
 from .security import decode_token, decode_guest_token
 
-ROLE_OWNER = "owner"
+ROLE_OWNER = "admin"
 ROLE_EDITOR = "editor"
 ROLE_GUEST = "guest"
 

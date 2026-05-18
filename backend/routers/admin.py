@@ -168,7 +168,7 @@ async def create_user(
 
 @router.patch("/users/{user_id}")
 async def update_user(user_id: str, body: UserUpdate, _: dict = Depends(require_role(ROLE_OWNER))):
-    if body.role and body.role not in (ROLE_OWNER, ROLE_EDITOR):
+    if body.role and body.role not in (ROLE_OWNER, ROLE_EDITOR,'admin'):
         raise HTTPException(status_code=400, detail="Invalid role. Allowed: owner, editor")
     update: dict = {}
     if body.role:
@@ -333,6 +333,7 @@ class ModelConfigCreate(BaseModel):
 
 class ModelConfigUpdate(BaseModel):
     name: Optional[str] = None
+    provider: Optional[str] = None
     model_id: Optional[str] = None
     api_key: Optional[str] = None
     api_base_url: Optional[str] = None
@@ -429,6 +430,8 @@ async def update_model_config(
     updates: dict = {"updated_at": datetime.now(timezone.utc).isoformat()}
     if body.name is not None:
         updates["name"] = body.name.strip()
+    if body.provider is not None and body.provider.strip():
+        updates["provider"] = body.provider.strip().lower()
     if body.model_id is not None and body.model_id.strip():
         updates["model_id"] = body.model_id.strip()
     if body.api_key is not None:

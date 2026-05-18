@@ -24,7 +24,11 @@ export default function AdminUsers() {
     const [busy, setBusy] = useState(false);
 
     const load = () => api.get("/admin/users").then((r) => setUsers(r.data)).catch(() => {});
-    useEffect(() => { load(); }, []);
+    useEffect(() => { 
+	    load();
+	    console.log('load',load)
+
+    }, []);
 
     const changeRole = async (userId, role) => {
         try {
@@ -41,7 +45,7 @@ export default function AdminUsers() {
         setBusy(true);
         try {
             const r = await api.post("/admin/users", form);
-            toast.success(`${r.data.role === "owner" ? "Owner" : "Editor"} created`);
+            toast.success(`${r.data.role === "admin" ? "Admin" : "Editor"} created`);
             setUsers((c) => [r.data, ...c]);
             setCreateOpen(false);
             setForm({ name: "", email: "", password: "", role: "editor" });
@@ -93,7 +97,7 @@ export default function AdminUsers() {
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="owner">Owner</SelectItem>
+                                    <SelectItem value="admin">Admin</SelectItem>
                                     <SelectItem value="editor">Editor</SelectItem>
                                 </SelectContent>
                             </Select>
@@ -117,7 +121,7 @@ export default function AdminUsers() {
                     <DialogHeader>
                         <DialogTitle className="font-heading text-2xl">New user</DialogTitle>
                         <DialogDescription>
-                            Create an editor or owner account. They'll log in with the email + password you set.
+                            Create an editor or admin account. They'll log in with the email + password you set.
                         </DialogDescription>
                     </DialogHeader>
                     <form onSubmit={submitCreate} className="space-y-4">
@@ -147,7 +151,7 @@ export default function AdminUsers() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="editor">Editor</SelectItem>
-                                    <SelectItem value="owner">Owner</SelectItem>
+                                    <SelectItem value="admin">Admin</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
