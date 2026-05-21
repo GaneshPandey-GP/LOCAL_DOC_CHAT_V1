@@ -101,7 +101,7 @@ export default function Landing() {
                     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-0 mt-12 border-l border-t border-border">
                         {[
                             { icon: Chats, title: "Streaming answers with citations", desc: "Token-by-token responses with inline [1][2] citations you can click to preview the exact source passage." },
-                            { icon: ShieldCheck, title: "Role-based access control", desc: "Owner, Editor, Viewer, and Guest roles enforced on every route. No UI-only gating." },
+                            { icon: ShieldCheck, title: "Role-based access control", desc: "Admin, Editor, Viewer, and Guest roles enforced on every route. No UI-only gating." },
                             { icon: Lock, title: "Secure share links", desc: "Tokenized URLs scoped server-side to an exact document subset. Password, expiry, single-use, domain-gated." },
                             { icon: Database, title: "Vector + metadata search", desc: "ChromaDB with OpenAI embeddings. Filter by tags, owner, and date. Strict document scoping enforced at query time." },
                             { icon: Lightning, title: "Confidence scoring", desc: "Every answer shows HIGH / MEDIUM / LOW grounding. We say “not enough evidence” when we can't prove it." },

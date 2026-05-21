@@ -43,7 +43,7 @@ export default function Register() {
                         Create your<br />workspace.
                     </h1>
                     <p className="text-sm text-muted-foreground mt-4 max-w-sm">
-                        Your first account becomes the Owner. Invite your team from the admin panel.
+                        Your first account becomes the Admin. Invite your team from the admin panel.
                     </p>
                 </div>
                 <div className="text-xs text-muted-foreground font-mono">No credit card · Self-hosted ready</div>

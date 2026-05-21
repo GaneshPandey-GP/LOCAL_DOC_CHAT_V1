@@ -268,8 +268,8 @@ const copy = async (t) => {
         return links.filter((l) => {
             if (statusFilter !== "all" && linkStatus(l) !== statusFilter) return false;
             if (modeFilter !== "all" && l.mode !== modeFilter) return false;
-            if (creatorFilter === "owner" && l.creator_role !== "owner") return false;
-            if (creatorFilter !== "all" && creatorFilter !== "owner" && l.creator_id !== creatorFilter) return false;
+            if (creatorFilter === "admin" && l.creator_role !== "admin") return false;
+            if (creatorFilter !== "all" && creatorFilter !== "admin" && l.creator_id !== creatorFilter) return false;
             if (q) {
                 const hay = [
                     l.title || "",
@@ -355,7 +355,7 @@ const copy = async (t) => {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All</SelectItem>
-                                <SelectItem value="owner">Owner</SelectItem>
+                                <SelectItem value="admin">Admin</SelectItem>
                                 {editorCreators.map((e) => (
                                     <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
                                 ))}

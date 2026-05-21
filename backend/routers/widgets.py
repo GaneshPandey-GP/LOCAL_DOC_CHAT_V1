@@ -85,7 +85,7 @@ def _public_widget(w: dict) -> dict:
 async def _verify_doc_access(user: dict, doc_ids: List[str]) -> None:
     """Raise 403 if user doesn't have access to all doc_ids."""
     doc_query: Dict[str, Any] = {"id": {"$in": doc_ids}}
-    if user["role"] != "owner":
+    if user["role"] != "admin":
         doc_query["owner_id"] = user["id"]
     found = await documents.find(doc_query, {"_id": 0, "id": 1}).to_list(500)
     found_ids = {d["id"] for d in found}
@@ -139,7 +139,7 @@ async def create_widget(
 @router.get("")
 async def list_widgets(user: dict = Depends(require_role(ROLE_EDITOR))):
     _check_flag()
-    query: Dict[str, Any] = {} if user["role"] == "owner" else {"owner_id": user["id"]}
+    query: Dict[str, Any] = {} if user["role"] == "admin" else {"owner_id": user["id"]}
     ws = await embed_widgets.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     return [_public_widget(w) for w in ws]
 
@@ -148,7 +148,7 @@ async def list_widgets(user: dict = Depends(require_role(ROLE_EDITOR))):
 async def get_widget(widget_id: str, user: dict = Depends(require_role(ROLE_EDITOR))):
     _check_flag()
     query: Dict[str, Any] = {"widget_id": widget_id}
-    if user["role"] != "owner":
+    if user["role"] != "admin":
         query["owner_id"] = user["id"]
     w = await embed_widgets.find_one(query, {"_id": 0})
     if not w:
@@ -165,7 +165,7 @@ async def update_widget(
 ):
     _check_flag()
     query: Dict[str, Any] = {"widget_id": widget_id}
-    if user["role"] != "owner":
+    if user["role"] != "admin":
         query["owner_id"] = user["id"]
     w = await embed_widgets.find_one(query, {"_id": 0})
     if not w:
@@ -209,7 +209,7 @@ async def delete_widget(
 ):
     _check_flag()
     query: Dict[str, Any] = {"widget_id": widget_id}
-    if user["role"] != "owner":
+    if user["role"] != "admin":
         query["owner_id"] = user["id"]
     w = await embed_widgets.find_one(query, {"_id": 0})
     if not w:
@@ -234,7 +234,7 @@ async def delete_widget(
 async def widget_analytics(widget_id: str, user: dict = Depends(require_role(ROLE_EDITOR))):
     _check_flag()
     query: Dict[str, Any] = {"widget_id": widget_id}
-    if user["role"] != "owner":
+    if user["role"] != "admin":
         query["owner_id"] = user["id"]
     w = await embed_widgets.find_one(query, {"_id": 0})
     if not w:

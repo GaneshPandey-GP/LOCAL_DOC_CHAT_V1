@@ -139,7 +139,7 @@ async def create_user(
     actor: dict = Depends(require_role(ROLE_OWNER)),
 ):
     if body.role not in (ROLE_OWNER, ROLE_EDITOR):
-        raise HTTPException(status_code=400, detail="Invalid role. Allowed: owner, editor")
+        raise HTTPException(status_code=400, detail="Invalid role. Allowed: Admin, editor")
     existing = await users.find_one({"email": body.email.lower()})
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -169,7 +169,7 @@ async def create_user(
 @router.patch("/users/{user_id}")
 async def update_user(user_id: str, body: UserUpdate, _: dict = Depends(require_role(ROLE_OWNER))):
     if body.role and body.role not in (ROLE_OWNER, ROLE_EDITOR,'admin'):
-        raise HTTPException(status_code=400, detail="Invalid role. Allowed: owner, editor")
+        raise HTTPException(status_code=400, detail="Invalid role. Allowed: admin, editor")
     update: dict = {}
     if body.role:
         update["role"] = body.role
@@ -192,7 +192,7 @@ async def delete_user(
     if target.get("role") == ROLE_OWNER:
         owner_count = await users.count_documents({"role": ROLE_OWNER})
         if owner_count <= 1:
-            raise HTTPException(status_code=400, detail="Cannot delete the last owner")
+            raise HTTPException(status_code=400, detail="Cannot delete the last admin")
     await users.delete_one({"id": user_id})
     await log_event(
         "user.delete",

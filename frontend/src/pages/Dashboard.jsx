@@ -55,7 +55,7 @@ const StatusBadge = ({ status }) => {
 
 export default function Dashboard() {
     const { user: currentUser } = useAuth();
-    const isOwner = currentUser?.role === "owner";
+    const isOwner = currentUser?.role === "admin";
 
     const [docs, setDocs] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -233,7 +233,7 @@ export default function Dashboard() {
             // Uploader filter — only relevant for owners
             if (uploaderFilter === "self") {
                 if (d.owner_id !== currentUser?.id) return false;
-            } else if (uploaderFilter === "owner") {
+            } else if (uploaderFilter === "admin") {
                 // Docs uploaded by any user with role=owner
                 const ownerIds = new Set(uploaderOptions.map((u) => u.id));
                 // We don't know roles per uploader from docs alone; treat

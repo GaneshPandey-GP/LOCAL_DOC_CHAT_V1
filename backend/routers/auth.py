@@ -52,7 +52,7 @@ async def register(body: RegisterRequest, request: Request):
     if count > 0:
         raise HTTPException(
             status_code=403,
-            detail="Public registration is disabled. Ask an Owner to invite you.",
+            detail="Public registration is disabled. Ask an Admin to invite you.",
         )
     role = ROLE_OWNER
 

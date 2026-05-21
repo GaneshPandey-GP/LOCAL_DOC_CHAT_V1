@@ -35,7 +35,7 @@ const PROVIDER_PRESETS = {
   ],
 };
 
-const ROLE_DISPLAY = { owner: "Admin", editor: "Editor", viewer: "Viewer", guest: "Guest" };
+const ROLE_DISPLAY = { admin: "Admin", editor: "Editor", viewer: "Viewer", guest: "Guest" };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function roleDisplay(role) {

@@ -54,7 +54,7 @@ async def _resolve_scope(
 
     # Editors get: own uploads OR docs assigned by an Owner.
     # Owners always get: everything.
-    if user["role"] == "owner":
+    if user["role"] == "admin":
         access_clause: dict = {}
     else:
         access_clause = {
