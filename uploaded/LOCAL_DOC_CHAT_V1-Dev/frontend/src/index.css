@@ -1,0 +1,188 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+@import url('https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800,900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+    /* ── Brand Card ── */
+    .dc-card {
+        @apply bg-white border border-[#E5E7EB] rounded-sm;
+    }
+    .dc-card-hover {
+        @apply transition-shadow duration-150 hover:shadow-sm hover:border-[#D1D5DB];
+    }
+
+    /* ── Overline label ── */
+    .dc-overline {
+        @apply text-xs uppercase tracking-[0.2em] font-semibold text-[#9CA3AF];
+    }
+
+    /* ── Dense dashboard grid ── */
+    .dc-grid {
+        @apply grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4;
+    }
+
+    /* ── Inline citation badge ── */
+    .dc-cite {
+        @apply inline-block font-mono bg-gray-100 border border-gray-300 rounded-sm text-xs px-1 py-0 cursor-pointer
+               hover:bg-[#0033A0] hover:text-white transition-colors duration-150;
+    }
+
+    /* ── Keyboard shortcut badge ── */
+    .dc-kbd {
+        @apply font-mono text-xs bg-gray-100 border border-gray-300 rounded-sm px-1.5 py-0.5;
+    }
+
+    /* ── Confidence badges ── */
+    .dc-confidence-high {
+        @apply text-[#059669] bg-[#D1FAE5] border border-[#6EE7B7] rounded-sm text-xs font-semibold px-2 py-0.5;
+    }
+    .dc-confidence-medium {
+        @apply text-[#D97706] bg-[#FEF3C7] border border-[#FCD34D] rounded-sm text-xs font-semibold px-2 py-0.5;
+    }
+    .dc-confidence-low {
+        @apply text-[#DC2626] bg-[#FEE2E2] border border-[#FCA5A5] rounded-sm text-xs font-semibold px-2 py-0.5;
+    }
+
+    /* ── Prose / markdown content ── */
+    .dc-prose {
+        @apply text-[#111827] leading-relaxed;
+    }
+    .dc-prose h1, .dc-prose h2, .dc-prose h3 {
+        @apply font-heading font-bold tracking-tight mt-6 mb-2;
+    }
+    .dc-prose p {
+        @apply mb-3;
+    }
+    .dc-prose code {
+        @apply font-mono text-sm bg-gray-100 border border-gray-200 rounded-sm px-1;
+    }
+    .dc-prose pre {
+        @apply font-mono text-sm bg-gray-50 border border-gray-200 rounded-sm p-4 overflow-x-auto;
+    }
+
+    /* ── Blinking cursor for streaming ── */
+    .dc-cursor::after {
+        content: '▋';
+        @apply animate-pulse text-[#0033A0];
+    }
+}
+
+body {
+    margin: 0;
+    font-family:
+        -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
+        "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
+        sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+    font-family:
+        source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
+}
+
+@layer utilities {
+    /* Checkbox/radio accent color */
+    .accent-brand-primary {
+        accent-color: #0033A0;
+    }
+}
+
+:root {
+        --background: 0 0% 100%;
+        --foreground: 0 0% 3.9%;
+        --card: 0 0% 100%;
+        --card-foreground: 0 0% 3.9%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 0 0% 3.9%;
+        --primary: 220 100% 31%;       /* #0033A0 brand-primary */
+        --primary-foreground: 0 0% 100%;
+        --secondary: 0 0% 96.1%;
+        --secondary-foreground: 0 0% 9%;
+        --muted: 0 0% 96.1%;
+        --muted-foreground: 0 0% 45.1%;
+        --accent: 0 0% 96.1%;
+        --accent-foreground: 0 0% 9%;
+        --destructive: 0 84.2% 60.2%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 0 0% 89.8%;
+        --input: 0 0% 89.8%;
+        --ring: 220 100% 31%;           /* #0033A0 brand-primary */
+        --chart-1: 12 76% 61%;
+        --chart-2: 173 58% 39%;
+        --chart-3: 197 37% 24%;
+        --chart-4: 43 74% 66%;
+        --chart-5: 27 87% 67%;
+        --radius: 0.5rem;
+    }
+    .dark {
+        --background: 0 0% 3.9%;
+        --foreground: 0 0% 98%;
+        --card: 0 0% 3.9%;
+        --card-foreground: 0 0% 98%;
+        --popover: 0 0% 3.9%;
+        --popover-foreground: 0 0% 98%;
+        --primary: 0 0% 98%;
+        --primary-foreground: 0 0% 9%;
+        --secondary: 0 0% 14.9%;
+        --secondary-foreground: 0 0% 98%;
+        --muted: 0 0% 14.9%;
+        --muted-foreground: 0 0% 63.9%;
+        --accent: 0 0% 14.9%;
+        --accent-foreground: 0 0% 98%;
+        --destructive: 0 62.8% 30.6%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 0 0% 14.9%;
+        --input: 0 0% 14.9%;
+        --ring: 0 0% 83.1%;
+        --chart-1: 220 70% 50%;
+        --chart-2: 160 60% 45%;
+        --chart-3: 30 80% 55%;
+        --chart-4: 280 65% 60%;
+        --chart-5: 340 75% 55%;
+    }
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+    body {
+        @apply bg-background text-foreground;
+    }
+}
+
+@layer base {
+    [data-debug-wrapper="true"] {
+        display: contents !important;
+    }
+
+    [data-debug-wrapper="true"] > * {
+        margin-left: inherit;
+        margin-right: inherit;
+        margin-top: inherit;
+        margin-bottom: inherit;
+        padding-left: inherit;
+        padding-right: inherit;
+        padding-top: inherit;
+        padding-bottom: inherit;
+        column-gap: inherit;
+        row-gap: inherit;
+        gap: inherit;
+        border-left-width: inherit;
+        border-right-width: inherit;
+        border-top-width: inherit;
+        border-bottom-width: inherit;
+        border-left-style: inherit;
+        border-right-style: inherit;
+        border-top-style: inherit;
+        border-bottom-style: inherit;
+        border-left-color: inherit;
+        border-right-color: inherit;
+        border-top-color: inherit;
+        border-bottom-color: inherit;
+    }
+}

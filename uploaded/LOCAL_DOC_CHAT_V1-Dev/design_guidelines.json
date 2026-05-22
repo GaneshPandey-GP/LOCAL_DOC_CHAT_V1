@@ -1,0 +1,106 @@
+{
+  "theme": "light",
+  "archetype": "4 (Swiss & High-Contrast)",
+  "emotional_tone": "Serious, authoritative, precise, trustworthy, structural",
+  "colors": {
+    "background": {
+      "primary": "#FFFFFF",
+      "secondary": "#F9FAFB",
+      "tertiary": "#F3F4F6"
+    },
+    "text": {
+      "primary": "#111827",
+      "secondary": "#4B5563",
+      "tertiary": "#9CA3AF"
+    },
+    "brand": {
+      "primary": "#0033A0",
+      "secondary": "#0A2540",
+      "accent": "#0055FF"
+    },
+    "feedback": {
+      "success": "#10B981",
+      "warning": "#F59E0B",
+      "error": "#EF4444",
+      "confidence_high": "#059669",
+      "confidence_medium": "#D97706",
+      "confidence_low": "#DC2626"
+    },
+    "border": {
+      "default": "#E5E7EB",
+      "strong": "#D1D5DB"
+    }
+  },
+  "typography": {
+    "fonts": {
+      "heading": "Cabinet Grotesk",
+      "body": "IBM Plex Sans",
+      "mono": "IBM Plex Mono"
+    },
+    "scale": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tighter font-black",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight font-bold",
+      "h3": "text-xl sm:text-2xl tracking-tight font-semibold",
+      "h4": "text-lg sm:text-xl font-medium",
+      "body": "text-base leading-relaxed",
+      "small": "text-sm",
+      "overline": "text-xs uppercase tracking-[0.2em] font-semibold"
+    }
+  },
+  "spacing_and_layout": {
+    "philosophy": "Grid Borders and Structural Rigidity",
+    "dashboard_grid": "Control Room Grid (grid-cols-1 md:grid-cols-3 lg:grid-cols-4) with gap-4 or gap-6",
+    "marketing_grid": "Tetris Grid with wide gaps (gap-8 to gap-12)",
+    "container_padding": "p-6 md:p-8 for cards, p-12 to p-24 for marketing sections",
+    "border_radius": "rounded-sm (2px) or rounded-md (6px) maximum. Maintain sharp, enterprise feel.",
+    "alignment": "Strictly left-aligned for data and chat. Never center-align paragraphs or dense data."
+  },
+  "surfaces_and_micro_themes": {
+    "dashboard_cards": "Flat background (bg-white), 1px subtle border (border-border), no default shadow. On hover: subtle shadow-sm and border color darkens.",
+    "chat_bubbles": "User: bg-gray-100 text-gray-900. AI: bg-white text-gray-900 border border-gray-200. Clear visual separation.",
+    "header": "Solid background (bg-white) with a hard bottom border. No glassmorphism.",
+    "citations": "Small monospaced inline badges. bg-gray-100 border border-gray-300 rounded-sm text-xs px-1 hover:bg-brand-primary hover:text-white transition-colors cursor-pointer."
+  },
+  "components_strategy": {
+    "general": "Use Shadcn/UI heavily customized for a flat, high-contrast Swiss aesthetic.",
+    "charts": "Recharts or Shadcn Charts. Use monochrome palettes with single accent colors (brand primary). Minimal grid lines.",
+    "data_tables": "Dense, left-aligned, sticky headers. Use hover effects on rows (bg-gray-50).",
+    "share_links": "Copy to clipboard input fields should have a strong focus ring (ring-2 ring-brand-primary offset-2).",
+    "icons": "Phosphor Icons (@phosphor-icons/react) - Duotone or Regular weight for crisp, technical look."
+  },
+  "animation_and_motion": {
+    "chat_streaming": "Framer Motion for smooth reveal of markdown chunks.",
+    "page_transitions": "Minimalist. opacity fade-in only (duration 0.2s).",
+    "interactions": "Hover states must have higher contrast. Buttons scale slightly (active:scale-[0.98])."
+  },
+  "media_and_images": {
+    "hero_background": {
+      "url": "https://images.pexels.com/photos/27077489/pexels-photo-27077489.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Abstract futuristic architectural details in stark black and white, serving as a structural geometric background for marketing."
+    },
+    "feature_structural_image": {
+      "url": "https://images.pexels.com/photos/593158/pexels-photo-593158.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Abstract geometric facade with grey panels, highlighting structured data."
+    },
+    "trusted_logos": [
+      {
+        "url": "https://images.pexels.com/photos/9973170/pexels-photo-9973170.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "name": "Coca-Cola"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1764344815160-0e2afc6939a0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzN8MHwxfHNlYXJjaHwyfHxjb21wYW55JTIwbG9nbyUyMHdoaXRlJTIwYmFja2dyb3VuZHxlbnwwfHx8fDE3NzcwMTA2Mjh8MA&ixlib=rb-4.1.0&q=85",
+        "name": "Subway"
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Install and use @phosphor-icons/react for all icons.",
+    "Implement 'Cabinet Grotesk' for all headings and 'IBM Plex Sans' for body text via Next.js next/font or standard Google Fonts/Fontshare.",
+    "For the marketing page, use the 'Tetris Grid' layout pattern and rely on high contrast black-and-white typography alongside the provided structural images.",
+    "In the Chat interface, format the AI responses strictly with markdown and render inline citations as small clickable monospaced badges.",
+    "Admin Dashboard must use a dense 'Control Room Grid' with sharp 1px borders everywhere (`border-collapse` style where possible).",
+    "Avoid generic Tailwind shadows (shadow-md). Use borders and layout density to establish hierarchy instead.",
+    "All interactive elements MUST have `data-testid` attributes.",
+    "Use Recharts for the admin analytics visualizations. Ensure charts use the brand primary color against a white background."
+  ]
+}
