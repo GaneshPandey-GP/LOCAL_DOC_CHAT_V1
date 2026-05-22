@@ -143,9 +143,14 @@ export default function DBAgent() {
                     </div>
                 </div>
                 <div className="flex items-center gap-2 text-xs">
+                    {status?.test_mode && (
+                        <Badge className="font-mono uppercase border-amber-500 text-amber-600 bg-amber-50" variant="outline" data-testid="db-agent-test-mode">
+                            <ShieldCheck size={12} /> Test Mode
+                        </Badge>
+                    )}
                     {status?.enabled ? (
                         <Badge className="font-mono uppercase" variant="outline" data-testid="db-agent-status">
-                            <ShieldCheck size={12} /> Enabled
+                            <ShieldCheck size={12} /> {status?.test_mode ? "Sandbox" : "Live"}
                         </Badge>
                     ) : (
                         <Badge className="font-mono uppercase" variant="outline" data-testid="db-agent-status">
@@ -160,7 +165,8 @@ export default function DBAgent() {
                     <div className="border border-amber-300 bg-amber-50 p-4 text-sm" data-testid="db-agent-disabled-banner">
                         <div className="font-semibold mb-1">DB Agent is disabled</div>
                         <div className="text-muted-foreground">
-                            Ask an admin to enable it in <span className="font-mono">Settings → DB Agent</span> and provide PostgreSQL credentials.
+                            Ask an admin to enable it in <span className="font-mono">Settings → DB Agent</span> and provide PostgreSQL credentials,
+                            or upload a sandbox SQLite file in <span className="font-mono">Settings → Test Database</span>.
                         </div>
                     </div>
                 )}

@@ -21,7 +21,7 @@ from . import schema_service
 
 logger = logging.getLogger("docchat.db_agent.sql_generator")
 
-SYSTEM_PROMPT = """You are a senior SQL analyst working on a read-only PostgreSQL analytics replica.
+SYSTEM_PROMPT_PG = """You are a senior SQL analyst working on a read-only PostgreSQL analytics replica.
 
 RULES (absolute):
 1. Generate ONE PostgreSQL SELECT (or WITH … SELECT) statement only.
@@ -36,6 +36,25 @@ RULES (absolute):
 ALLOWED SCHEMA:
 {schema_text}
 """
+
+SYSTEM_PROMPT_SQLITE = """You are a senior SQL analyst working on a read-only SQLite sandbox database (Test Mode).
+
+RULES (absolute):
+1. Generate ONE SQLite SELECT (or WITH … SELECT) statement only.
+2. Use SQLite-compatible syntax — no PostgreSQL-only functions (no date_trunc, no ::cast, no INTERVAL keyword). Prefer `strftime`, `date`, `julianday`, CAST(x AS …).
+3. Never use INSERT, UPDATE, DELETE, DROP, ALTER, CREATE, TRUNCATE, EXEC.
+4. Reference only tables/columns from the schema given below. Do NOT invent.
+5. Always include a LIMIT clause (cap at {row_cap}) unless the user explicitly asks for an aggregate.
+6. Output STRICT JSON in the form:
+   {{"sql": "...", "explanation": "one-paragraph plain-English summary"}}
+   No markdown, no commentary outside the JSON object.
+
+ALLOWED SCHEMA:
+{schema_text}
+"""
+
+# Backward-compat alias
+SYSTEM_PROMPT = SYSTEM_PROMPT_PG
 
 
 async def _get_client_and_model() -> tuple[AsyncOpenAI, str]:
@@ -91,7 +110,9 @@ async def generate_sql(natural_query: str, row_cap: int = 1000) -> dict:
     """Return {"sql": str, "explanation": str}."""
     schema = await schema_service.introspect()
     schema_text = schema_service.format_for_llm(schema)
-    system = SYSTEM_PROMPT.format(row_cap=row_cap, schema_text=schema_text)
+    # Pick dialect-aware prompt based on the introspected engine
+    template = SYSTEM_PROMPT_SQLITE if schema.get("engine") == "sqlite" else SYSTEM_PROMPT_PG
+    system = template.format(row_cap=row_cap, schema_text=schema_text)
 
     client, model = await _get_client_and_model()
     resp = await client.chat.completions.create(

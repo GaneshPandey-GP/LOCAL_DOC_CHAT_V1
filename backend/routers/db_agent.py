@@ -36,21 +36,29 @@ class ReportBody(BaseModel):
 
 
 async def _ensure_enabled():
+    """Allow the DB Agent to run when Postgres is enabled OR Test Mode is active."""
+    from services.db_agent.connection import is_test_mode_active
+    if await is_test_mode_active():
+        return
     enabled = await config_service.get_setting("db_agent_enabled", False)
     if not enabled:
         raise HTTPException(
             status_code=400,
-            detail="DB Agent is disabled. Enable it via Settings → DB Agent.",
+            detail="DB Agent is disabled. Enable it via Settings → DB Agent, or upload a Test Database.",
         )
 
 
 @router.get("/status")
 async def db_agent_status(user: dict = Depends(get_current_user)):
-    """Lightweight status: whether the agent is enabled + reachable."""
+    """Lightweight status: whether the agent is enabled + reachable + current mode."""
+    from services.db_agent.connection import is_test_mode_active
     enabled = await config_service.get_setting("db_agent_enabled", False)
+    test_mode = await is_test_mode_active()
     return {
-        "enabled": bool(enabled),
+        "enabled": bool(enabled) or test_mode,
         "configured": bool(await config_service.get_setting("db_agent_postgres_host", "")),
+        "mode": "test" if test_mode else "live",
+        "test_mode": test_mode,
     }
 
 

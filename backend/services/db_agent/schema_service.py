@@ -3,13 +3,18 @@
 Returns ONLY the schemas/tables the agent is allowed to see (allowlist from
 settings: db_agent_allowed_schemas, comma-separated; defaults to "public").
 The LLM must never see anything outside this subset.
+
+When a Test Database (SQLite) is active, this introspects the uploaded `.db`
+file via `sqlite_master` + `PRAGMA table_info` instead — bypassing Postgres.
 """
+import asyncio
 import logging
+import sqlite3
 from typing import Optional
 
 from services import config_service
 
-from .connection import get_pool
+from .connection import get_pool, get_test_db_path
 
 logger = logging.getLogger("docchat.db_agent.schema")
 
@@ -22,9 +27,44 @@ async def _allowed_schemas() -> list[str]:
     return [s.strip() for s in str(raw).split(",") if s.strip()]
 
 
+def _sqlite_introspect(db_path: str) -> dict:
+    """Synchronous SQLite schema dump — invoked via asyncio.to_thread."""
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    try:
+        tables_meta: dict[str, list[dict]] = {}
+        names = [
+            r[0]
+            for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' "
+                "AND name NOT LIKE 'sqlite_%' ORDER BY name"
+            ).fetchall()
+        ]
+        for t in names:
+            cols = conn.execute(f"PRAGMA table_info({t})").fetchall()
+            tables_meta[f"main.{t}"] = [
+                {"column": c[1], "type": c[2] or "", "nullable": (c[3] == 0)}
+                for c in cols
+            ]
+        return {"schemas": ["main"], "tables": tables_meta, "engine": "sqlite"}
+    finally:
+        conn.close()
+
+
 async def introspect(force: bool = False) -> dict:
     """Return {schemas: [...], tables: {schema.table: [{column, type, nullable}]}}."""
     global _cached_schema, _cached_key
+
+    # ── Test-mode branch: SQLite sandbox introspection ─────────────────────
+    test_path = await get_test_db_path()
+    if test_path:
+        cache_key = f"sqlite:{test_path}"
+        if not force and _cached_schema is not None and _cached_key == cache_key:
+            return _cached_schema
+        _cached_schema = await asyncio.to_thread(_sqlite_introspect, test_path)
+        _cached_key = cache_key
+        return _cached_schema
+
+    # ── Live Postgres path (untouched) ─────────────────────────────────────
     schemas = await _allowed_schemas()
     cache_key = ",".join(sorted(schemas))
     if not force and _cached_schema is not None and _cached_key == cache_key:
@@ -49,7 +89,7 @@ async def introspect(force: bool = False) -> dict:
             "type": r["data_type"],
             "nullable": (r["is_nullable"] == "YES"),
         })
-    _cached_schema = {"schemas": schemas, "tables": tables}
+    _cached_schema = {"schemas": schemas, "tables": tables, "engine": "postgres"}
     _cached_key = cache_key
     return _cached_schema
 

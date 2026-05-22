@@ -11,6 +11,7 @@ import {
   CheckCircle, XCircle, Plus, PencilSimple, Brain, Cube,
   ArrowRight, FloppyDisk, X, Trash, CheckFat, CaretDown,
   CaretUp, Lightning, Eye, EyeSlash, Spinner, Database, Gear,
+  UploadSimple, Flask,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
@@ -795,6 +796,185 @@ function DBAgentSection() {
   );
 }
 
+// ─── Test Database (sandbox SQLite for the DB Agent) ──────────────────────────
+function TestDatabaseSection() {
+  const [open, setOpen] = useState(false);
+  const [status, setStatus] = useState(null);     // {active, filename, size, uploaded_at, path}
+  const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = React.useRef(null);
+
+  const load = async () => {
+    try {
+      const r = await api.get("/v2/settings/test-db");
+      setStatus(r.data);
+    } catch {
+      setStatus({ active: false });
+    }
+  };
+
+  useEffect(() => { if (open && status === null) load(); }, [open]);
+
+  // Always know the mode for the badge in the header — load once on mount
+  useEffect(() => { load(); }, []);
+
+  const onPickFile = () => fileInputRef.current?.click();
+
+  const onFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-uploading same file later
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".db")) {
+      toast.error("Only .db (SQLite) files are accepted");
+      return;
+    }
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await api.post("/v2/settings/test-db", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setStatus(r.data);
+      toast.success("Test Database activated · DB Agent is now in Test Mode");
+    } catch (err) {
+      const msg = err?.response?.data?.detail || "Upload failed";
+      toast.error(typeof msg === "string" ? msg : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const remove = async () => {
+    if (!window.confirm("Remove the test database? DB Agent will revert to the live PostgreSQL connection.")) return;
+    setBusy(true);
+    try {
+      await api.delete("/v2/settings/test-db");
+      setStatus({ active: false });
+      toast.success("Test Database removed · reverted to Live Mode");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Remove failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const fmtBytes = (n) => {
+    if (!n) return "0 B";
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+    return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+  };
+
+  const isTest = !!status?.active;
+
+  return (
+    <section>
+      <button onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between group" data-testid="test-db-toggle">
+        <div className="dc-overline flex items-center gap-2">
+          <Flask size={12} weight="fill" /> Test Database
+          <span
+            className={`ml-2 inline-flex items-center gap-1 px-2 py-0.5 border text-[10px] font-mono uppercase tracking-widest ${
+              isTest
+                ? "border-amber-500 text-amber-600 bg-amber-50"
+                : "border-green-600 text-green-700 bg-green-50"
+            }`}
+            data-testid="test-db-mode-indicator"
+          >
+            <Lightning size={9} weight="fill" /> {isTest ? "Test Mode" : "Live Mode"}
+          </span>
+        </div>
+        <div className="flex items-center gap-1 text-xs text-muted-foreground group-hover:text-foreground transition-colors">
+          {open ? <><CaretUp size={12} /> Hide</> : <><CaretDown size={12} /> Show</>}
+        </div>
+      </button>
+
+      {open && (
+        <div className="mt-3 space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Upload a <span className="font-mono">.db</span> SQLite file to run the DB Agent against a sandbox database.
+            The production PostgreSQL connection remains untouched — removing the file reverts to Live Mode silently.
+          </p>
+
+          {status === null ? (
+            <div className="text-xs text-muted-foreground">Loading…</div>
+          ) : isTest ? (
+            <div className="border border-amber-300 bg-amber-50/40 p-4" data-testid="test-db-active-card">
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div className="flex items-start gap-3 min-w-0">
+                  <Database size={22} weight="duotone" className="text-amber-600 shrink-0" />
+                  <div className="min-w-0">
+                    <div className="font-medium truncate" data-testid="test-db-filename">{status.filename}</div>
+                    <div className="text-xs text-muted-foreground font-mono">
+                      {fmtBytes(status.size)} · uploaded {status.uploaded_at ? new Date(status.uploaded_at).toLocaleString() : "—"}
+                    </div>
+                    <div className="text-[10px] text-amber-700 font-mono mt-1">
+                      All DB Agent queries route to this SQLite file.
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={onPickFile} disabled={uploading || busy} data-testid="test-db-replace-button">
+                    <UploadSimple size={13} /> Replace
+                  </Button>
+                  <Button variant="destructive" size="sm" onClick={remove} disabled={busy || uploading} data-testid="test-db-remove-button">
+                    <Trash size={13} /> Remove
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={onPickFile}
+              disabled={uploading}
+              className="w-full flex flex-col items-center justify-center border-2 border-dashed border-border hover:border-brand-primary transition-colors p-8 cursor-pointer disabled:opacity-50"
+              data-testid="test-db-dropzone"
+            >
+              {uploading ? (
+                <>
+                  <Spinner size={28} className="animate-spin text-brand-primary" />
+                  <div className="mt-3 text-sm font-medium">Uploading…</div>
+                </>
+              ) : (
+                <>
+                  <UploadSimple size={32} weight="duotone" className="text-muted-foreground" />
+                  <div className="mt-3 font-medium">Click to upload a .db file</div>
+                  <div className="text-xs text-muted-foreground mt-1 font-mono">SQLite v3 · up to 100 MB</div>
+                </>
+              )}
+            </button>
+          )}
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".db"
+            className="hidden"
+            onChange={onFileChange}
+            data-testid="test-db-file-input"
+          />
+
+          <div className="border border-border divide-y divide-border text-[11px]">
+            <div className="px-3 py-2">
+              <div className="font-mono uppercase tracking-widest text-muted-foreground text-[10px] mb-1">Isolation guarantee</div>
+              <div className="text-muted-foreground">
+                Production credentials in the DB Agent tab are not modified. Test Mode is a runtime route at the executor level only.
+              </div>
+            </div>
+            <div className="px-3 py-2">
+              <div className="font-mono uppercase tracking-widest text-muted-foreground text-[10px] mb-1">Read-only enforcement</div>
+              <div className="text-muted-foreground">
+                The sandbox file is opened with <span className="font-mono">mode=ro</span>; the existing SQL AST validator continues to reject anything that isn't SELECT / WITH.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 // ─── Main Settings Page ───────────────────────────────────────────────────────
 export default function Settings() {
   const { user } = useAuth();
@@ -974,6 +1154,9 @@ export default function Settings() {
 
         {/* Stream 6 — DB Agent (admin only) */}
         {isOwner && <DBAgentSection />}
+
+        {/* Test Database (sandbox SQLite) — admin only */}
+        {isOwner && <TestDatabaseSection />}
 
       </div>
 

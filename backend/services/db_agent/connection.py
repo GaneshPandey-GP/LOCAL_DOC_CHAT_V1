@@ -87,3 +87,24 @@ async def close_pool() -> None:
             pass
         _pool = None
         _pool_key = None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test Database (sandbox SQLite) routing
+#
+# When a `.db` file has been uploaded via Settings → Test Database, the
+# orchestrator/executor/schema_service route ALL queries to that file
+# instead of the production Postgres pool. Production config (host/user/pwd)
+# is left untouched — removing the file reverts seamlessly to live mode.
+# ─────────────────────────────────────────────────────────────────────────────
+async def get_test_db_path() -> str:
+    """Return the active test-DB filesystem path, or empty string."""
+    path = await config_service.get_setting("db_agent_test_db_path", "")
+    if not path:
+        return ""
+    from pathlib import Path
+    return path if Path(path).exists() else ""
+
+
+async def is_test_mode_active() -> bool:
+    return bool(await get_test_db_path())
