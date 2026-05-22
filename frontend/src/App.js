@@ -1,54 +1,61 @@
-import { useEffect } from "react";
+import React from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Toaster } from "@/components/ui/sonner";
+import { AuthProvider, useAuth } from "@/lib/auth";
+
+import Login from "@/pages/Login";
+import AppLayout from "@/pages/AppLayout";
+import Dashboard from "@/pages/Dashboard";
+import Chat from "@/pages/Chat";
+import ShareLinks from "@/pages/ShareLinks";
+import GuestShare from "@/pages/GuestShare";
+import AdminAnalytics from "@/pages/AdminAnalytics";
+import AdminAudit from "@/pages/AdminAudit";
+import AdminUsers from "@/pages/AdminUsers";
+import Settings from "@/pages/Settings";
+import EmbedWidget from "@/pages/EmbedWidget";
+import AdminFlags from "@/pages/AdminFlags";
+import ShareHistory from "@/pages/ShareHistory";
+import DBAgent from "@/pages/DBAgent";
+
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
-
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
-
-  useEffect(() => {
-    helloWorldApi();
-  }, []);
-
-  return (
-    <div>
-      <header className="App-header">
-        <a
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
-  );
-};
+function PrivateRoute({ children, requireRole }) {
+    const { user, loading } = useAuth();
+    if (loading) return <div className="p-10 text-sm text-muted-foreground">Loading…</div>;
+    if (!user) return <Navigate to="/login" replace />;
+    if (requireRole && user.role !== requireRole && user.role !== "admin") return <Navigate to="/app" replace />;
+    return children;
+}
 
 function App() {
-  return (
-    <div className="App">
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </div>
-  );
+    return (
+        <AuthProvider>
+            <BrowserRouter>
+                <Routes>
+                    <Route path="/" element={<Navigate to="/login" replace />} />
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/share/:token" element={<GuestShare />} />
+                    <Route path="/app" element={<PrivateRoute><AppLayout /></PrivateRoute>}>
+                        <Route index element={<Dashboard />} />
+                        <Route path="chat" element={<Chat />} />
+                        <Route path="chat/:sessionId" element={<Chat />} />
+                        <Route path="db-agent" element={<DBAgent />} />
+                        <Route path="shares" element={<ShareLinks />} />
+                        <Route path="shares/history" element={<ShareHistory />} />
+                        <Route path="embed-widget" element={<EmbedWidget />} />
+                        <Route path="settings" element={<Settings />} />
+                        <Route path="admin/analytics" element={<PrivateRoute requireRole="admin"><AdminAnalytics /></PrivateRoute>} />
+                        <Route path="admin/audit" element={<PrivateRoute requireRole="admin"><AdminAudit /></PrivateRoute>} />
+                        <Route path="admin/users" element={<PrivateRoute requireRole="admin"><AdminUsers /></PrivateRoute>} />
+                        <Route path="admin/flags" element={<PrivateRoute requireRole="admin"><AdminFlags /></PrivateRoute>} />
+                    </Route>
+                    <Route path="*" element={<Navigate to="/login" replace />} />
+                </Routes>
+            </BrowserRouter>
+            <Toaster position="top-right" />
+        </AuthProvider>
+    );
 }
 
 export default App;

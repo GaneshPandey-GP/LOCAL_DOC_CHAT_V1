@@ -7,12 +7,27 @@ module.exports = {
   ],
   theme: {
   	extend: {
+  		fontFamily: {
+  			heading: ['Cabinet Grotesk', 'Inter', 'sans-serif'],
+  			body: ['IBM Plex Sans', 'sans-serif'],
+  			mono: ['IBM Plex Mono', 'monospace'],
+  		},
   		borderRadius: {
   			lg: 'var(--radius)',
   			md: 'calc(var(--radius) - 2px)',
   			sm: 'calc(var(--radius) - 4px)'
   		},
   		colors: {
+  			brand: {
+  				primary: '#0033A0',
+  				secondary: '#0A2540',
+  				accent: '#0055FF',
+  			},
+  			confidence: {
+  				high: '#059669',
+  				medium: '#D97706',
+  				low: '#DC2626',
+  			},
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
   			card: {
