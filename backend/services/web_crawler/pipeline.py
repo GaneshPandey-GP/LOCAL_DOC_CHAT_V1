@@ -22,7 +22,7 @@ from core.config import is_enabled
 from core.db import crawl_history, crawl_jobs, documents, knowledge_bases
 from services import config_service
 from services.qdrant.ingestion import add_chunks
-from services.rag import chunk_text  # reuse existing chunker
+from services.chunking import chunk_text  # reuse existing chunker
 
 from .crawler import WebCrawler, CrawledPage
 
@@ -53,7 +53,7 @@ async def _ingest_page(kb: dict, page: CrawledPage) -> tuple[int, bool]:
 
     chunk_size = int(await config_service.get_setting("chunk_size", 1000))
     overlap = int(await config_service.get_setting("chunk_overlap", 200))
-    chunks_raw = chunk_text(page.content, chunk_size=chunk_size, overlap=overlap)
+    chunks_raw = chunk_text(page.content, chunk_tokens=chunk_size, overlap=overlap)
     chunks = [{"text": t, "chunk_index": i, "file_type": "web"} for i, t in enumerate(chunks_raw)]
 
     doc_id = _doc_id_for(kb["id"], page.url)

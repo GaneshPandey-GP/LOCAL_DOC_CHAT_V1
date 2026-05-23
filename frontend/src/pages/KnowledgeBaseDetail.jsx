@@ -9,9 +9,10 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { ArrowLeft, MagnifyingGlass, FloppyDisk, FileText, ChartLine, Robot as Spider } from "@phosphor-icons/react";
+import { ArrowLeft, MagnifyingGlass, FloppyDisk, FileText, ChartLine, Robot as Spider, Plus, X } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import UploadDialog from "@/components/UploadDialog";
 
 const TABS = [
     { id: "settings", label: "Settings" },
@@ -34,6 +35,11 @@ export default function KnowledgeBaseDetail() {
     const [hits, setHits] = useState([]);
     const [searching, setSearching] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [uploadOpen, setUploadOpen] = useState(false);
+    const [unassigned, setUnassigned] = useState([]);
+    const [movePickerOpen, setMovePickerOpen] = useState(false);
+    const [pickedIds, setPickedIds] = useState([]);
+    const [moving, setMoving] = useState(false);
 
     const load = async () => {
         const r = await api.get(`/v2/kb/${kbId}`);
@@ -46,13 +52,45 @@ export default function KnowledgeBaseDetail() {
 
     useEffect(() => {
         if (tab === "docs") {
-            api.get(`/v2/documents`).then(r => {
-                setDocs(r.data.filter(d => d.kb_id === kbId));
-            });
+            api.get(`/v2/documents`, { params: { kb_id: kbId } }).then(r => setDocs(r.data));
         } else if (tab === "analytics") {
             api.get(`/v2/kb/${kbId}/analytics`).then(r => setAnalytics(r.data));
         }
     }, [tab, kbId]);
+
+    const refreshDocs = () => api.get(`/v2/documents`, { params: { kb_id: kbId } }).then(r => setDocs(r.data));
+
+    const openMovePicker = async () => {
+        // load docs not yet assigned to any KB so the user can pull them in here
+        try {
+            const r = await api.get(`/v2/documents`, { params: { kb_id: "none" } });
+            setUnassigned(r.data);
+            setPickedIds([]);
+            setMovePickerOpen(true);
+        } catch (e) { toast.error("Failed to load documents"); }
+    };
+
+    const confirmMove = async () => {
+        if (!pickedIds.length) { toast.error("Pick at least one document"); return; }
+        setMoving(true);
+        try {
+            await api.post("/v2/documents/bulk-assign-kb", { document_ids: pickedIds, kb_id: kbId });
+            toast.success(`Moved ${pickedIds.length} document(s) into this KB`);
+            setMovePickerOpen(false);
+            refreshDocs();
+        } catch (e) {
+            toast.error(e?.response?.data?.detail || "Move failed");
+        } finally { setMoving(false); }
+    };
+
+    const removeFromKB = async (docId) => {
+        if (!window.confirm("Remove this document from the KB? (It stays in the workspace.)")) return;
+        try {
+            await api.post("/v2/documents/bulk-assign-kb", { document_ids: [docId], kb_id: null });
+            toast.success("Removed from KB");
+            refreshDocs();
+        } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+    };
 
     const save = async () => {
         setSaving(true);
@@ -180,20 +218,54 @@ export default function KnowledgeBaseDetail() {
                 )}
 
                 {tab === "docs" && (
-                    <div className="border border-border">
-                        <div className="grid grid-cols-[1fr_120px_100px_140px_100px] gap-3 px-3 py-2 bg-secondary/50 border-b border-border text-xs font-mono uppercase tracking-wider text-muted-foreground">
-                            <div>File</div><div>Type</div><div>Chunks</div><div>Indexed</div><div>Status</div>
+                    <div className="space-y-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="text-sm text-muted-foreground">
+                                <span className="font-mono font-semibold text-foreground">{docs.length}</span> document(s) in this knowledge base
+                            </div>
+                            <div className="flex gap-2">
+                                <Button variant="outline" onClick={openMovePicker} data-testid="kb-add-existing-docs">
+                                    <Plus size={14} /> Add existing documents
+                                </Button>
+                                <Button onClick={() => setUploadOpen(true)} data-testid="kb-upload-button">
+                                    <Plus size={14} /> Upload to this KB
+                                </Button>
+                            </div>
                         </div>
-                        {docs.length === 0 ? <div className="p-6 text-center text-sm text-muted-foreground">No documents in this KB</div> :
-                            docs.map(d => (
-                                <div key={d.id} className="grid grid-cols-[1fr_120px_100px_140px_100px] gap-3 px-3 py-2 border-b border-border last:border-b-0 text-sm">
-                                    <div className="truncate">{d.filename}</div>
-                                    <div className="text-xs font-mono">{d.file_type}</div>
-                                    <div className="font-mono">{d.chunk_count}</div>
-                                    <div className="text-xs text-muted-foreground">{d.indexed_at ? new Date(d.indexed_at).toLocaleDateString() : "—"}</div>
-                                    <Badge variant="outline" className="text-[10px]">{d.status}</Badge>
-                                </div>
-                            ))}
+                        <div className="border border-border overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead className="bg-secondary/50 text-xs font-mono uppercase text-muted-foreground">
+                                    <tr>
+                                        <th className="text-left px-3 py-2">File</th>
+                                        <th className="text-left px-3 py-2">Type</th>
+                                        <th className="text-right px-3 py-2">Chunks</th>
+                                        <th className="text-left px-3 py-2">Indexed</th>
+                                        <th className="text-left px-3 py-2">Status</th>
+                                        <th className="text-right px-3 py-2"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {docs.length === 0 ? (
+                                        <tr><td colSpan={6} className="p-6 text-center text-muted-foreground text-sm">
+                                            No documents yet — upload or add existing docs from the workspace.
+                                        </td></tr>
+                                    ) : docs.map(d => (
+                                        <tr key={d.id} className="border-t border-border" data-testid={`kb-doc-${d.id}`}>
+                                            <td className="px-3 py-2 truncate max-w-[280px]">{d.filename}</td>
+                                            <td className="px-3 py-2 text-xs font-mono">{d.file_type || "—"}</td>
+                                            <td className="px-3 py-2 text-right font-mono">{d.chunk_count}</td>
+                                            <td className="px-3 py-2 text-xs text-muted-foreground">{d.indexed_at ? new Date(d.indexed_at).toLocaleDateString() : "—"}</td>
+                                            <td className="px-3 py-2"><Badge variant="outline" className="text-[10px]">{d.status}</Badge></td>
+                                            <td className="px-3 py-2 text-right">
+                                                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => removeFromKB(d.id)} title="Remove from KB">
+                                                    <X size={13} />
+                                                </Button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 )}
 

@@ -183,6 +183,17 @@ async def start_crawl(
 ):
     if not is_enabled("ENABLE_WEB_CRAWLER"):
         raise HTTPException(400, "Web crawler is disabled (ENABLE_WEB_CRAWLER=false)")
+    # Preflight: crawled pages are written to Qdrant. If Qdrant is unreachable
+    # we fail fast with a clear message instead of letting the background task
+    # die mid-pipeline.
+    from services.qdrant.client import health_check as _qhealth
+    if not await _qhealth():
+        raise HTTPException(
+            503,
+            "Vector store (Qdrant) is unreachable. Start the Qdrant container "
+            "(docker compose -f docker-compose.qdrant.yml up -d qdrant) and "
+            "set QDRANT_HOST in backend .env before launching a crawl.",
+        )
     kb = await _get_owned_kb(kb_id, user, require_owner=True)
 
     # Reject if a job is already running for this KB

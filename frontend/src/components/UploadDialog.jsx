@@ -32,19 +32,24 @@ const FORMAT_MAP = {
     jpeg: { icon: ImageIcon, label: "Image (OCR)", flag: "ENABLE_IMAGE_OCR" },
 };
 
-export default function UploadDialog({ open, onOpenChange, onUploaded }) {
+export default function UploadDialog({ open, onOpenChange, onUploaded, defaultKbId }) {
     const [file, setFile] = useState(null);
     const [tags, setTags] = useState("");
     const [category, setCategory] = useState("");
+    const [kbId, setKbId] = useState(defaultKbId || "");
+    const [knowledgeBases, setKnowledgeBases] = useState([]);
     const [busy, setBusy] = useState(false);
     const [flags, setFlags] = useState({});
 
     useEffect(() => {
         if (!open) return;
         api.get("/v2/flags").then((r) => setFlags(r.data)).catch(() => {});
-    }, [open]);
+        // Load KBs once per dialog opening so the picker is fresh.
+        api.get("/v2/kb").then((r) => setKnowledgeBases(r.data || [])).catch(() => setKnowledgeBases([]));
+        if (defaultKbId) setKbId(defaultKbId);
+    }, [open, defaultKbId]);
 
-    const reset = () => { setFile(null); setTags(""); setCategory(""); };
+    const reset = () => { setFile(null); setTags(""); setCategory(""); if (!defaultKbId) setKbId(""); };
     const handleClose = (o) => { if (!o) reset(); onOpenChange(o); };
 
     const enabledFormats = Object.entries(FORMAT_MAP).filter(([ext, m]) => !m.flag || flags[m.flag]);
@@ -59,6 +64,7 @@ export default function UploadDialog({ open, onOpenChange, onUploaded }) {
             fd.append("file", file);
             fd.append("tags", tags);
             fd.append("category", category);
+            if (kbId) fd.append("kb_id", kbId);
             await api.post("/v2/documents/ingest", fd, { headers: { "Content-Type": "multipart/form-data" } });
             toast.success("Upload started — indexing in background");
             reset();
@@ -146,6 +152,26 @@ export default function UploadDialog({ open, onOpenChange, onUploaded }) {
                                 ))}
                             </SelectContent>
                         </Select>
+                    </div>
+
+                    <div>
+                        <Label htmlFor="kb" className="dc-overline">Knowledge Base <span className="text-muted-foreground normal-case text-[10px]">(optional)</span></Label>
+                        <Select value={kbId || "__none__"} onValueChange={(v) => setKbId(v === "__none__" ? "" : v)} disabled={!!defaultKbId}>
+                            <SelectTrigger id="kb" className="mt-1 h-9" data-testid="upload-kb-select">
+                                <SelectValue placeholder="No knowledge base" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="__none__">No knowledge base</SelectItem>
+                                {knowledgeBases.map((kb) => (
+                                    <SelectItem key={kb.id} value={kb.id} data-testid={`upload-kb-${kb.id}`}>
+                                        {kb.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        {defaultKbId && (
+                            <div className="text-[10px] text-muted-foreground mt-1 font-mono">Locked to this knowledge base</div>
+                        )}
                     </div>
 
                     <div>

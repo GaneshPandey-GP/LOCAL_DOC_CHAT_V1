@@ -63,6 +63,7 @@ class DocumentOut(BaseModel):
     page_count: int = 0
     tags: List[str] = []
     category: str = DEFAULT_CATEGORY  # Stream 1
+    kb_id: Optional[str] = None       # Mar 2026 — KB association
     assigned_to: List[str] = []
     created_at: str
     indexed_at: Optional[str] = None
@@ -76,6 +77,7 @@ async def upload_document(
     file: UploadFile = File(...),
     tags: str = Form(""),
     category: str = Form(""),
+    kb_id: str = Form(""),
     user: dict = Depends(require_role(ROLE_EDITOR)),
 ):
     ext = Path(file.filename or "").suffix.lower()
@@ -158,6 +160,19 @@ async def upload_document(
     size = len(raw_content)
 
     parsed_tags = [t.strip() for t in tags.split(",") if t.strip()]
+    # Optional KB association (Mar 2026) — accepts a KB UUID owned by the
+    # uploader (or by any owner if uploader is admin).  Empty string = unassigned.
+    kb_value = (kb_id or "").strip() or None
+    if kb_value:
+        from core.db import knowledge_bases
+        kb_doc = await knowledge_bases.find_one(
+            {"id": kb_value},
+            {"_id": 0, "id": 1, "owner_id": 1},
+        )
+        if not kb_doc:
+            raise HTTPException(status_code=400, detail="Unknown knowledge_base id")
+        if kb_doc["owner_id"] != user["id"] and user["role"] not in ("admin", "owner"):
+            raise HTTPException(status_code=403, detail="Not your knowledge base")
 
     doc = {
         "id": doc_id,
@@ -174,6 +189,7 @@ async def upload_document(
         "page_count": 0,
         "tags": parsed_tags,
         "category": cat_value,
+        "kb_id": kb_value,
         "assigned_to": [],
         "content_hash": content_hash,
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -208,6 +224,7 @@ async def list_documents(
     q: Optional[str] = None,
     tag: Optional[str] = None,
     category: Optional[str] = None,    # Stream 1
+    kb_id: Optional[str] = None,       # Mar 2026 — filter to docs in a KB ('none' = unassigned)
     status: Optional[str] = None,      # Stream 4: ready | processing | failed
     uploaded_by: Optional[str] = None, # Stream 4: user_id | "self"
     access: Optional[str] = None,      # Stream 4: self | assigned
@@ -250,6 +267,13 @@ async def list_documents(
             })
         elif category in ALLOWED_CATEGORIES:
             and_clauses.append({"category": category})
+    # KB scope (Mar 2026): "none" = docs without a KB assignment; any other
+    # value matches that specific KB id.
+    if kb_id and kb_id != "all":
+        if kb_id == "none":
+            and_clauses.append({"$or": [{"kb_id": None}, {"kb_id": {"$exists": False}}, {"kb_id": ""}]})
+        else:
+            and_clauses.append({"kb_id": kb_id})
     if status and status != "all":
         if status == "processing":
             and_clauses.append({"status": {"$nin": ["ready", "failed"]}})
@@ -561,6 +585,66 @@ async def bulk_assign_documents(
         "modified": result.modified_count,
         "documents": body.document_ids,
         "editors": valid_editor_ids,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Bulk assign documents to a Knowledge Base (Mar 2026)
+# ---------------------------------------------------------------------------
+class BulkKBAssignmentBody(BaseModel):
+    document_ids: List[str]
+    kb_id: Optional[str] = None   # null/empty unassigns
+
+
+@router.post("/bulk-assign-kb")
+async def bulk_assign_kb(
+    body: BulkKBAssignmentBody,
+    request: Request,
+    actor: dict = Depends(require_role(ROLE_EDITOR)),
+):
+    """Move one or more documents into / out of a Knowledge Base.
+
+    Editors may only operate on documents they own; admins can move any doc.
+    Setting `kb_id=null` removes the association.
+    """
+    if not body.document_ids:
+        raise HTTPException(status_code=400, detail="document_ids cannot be empty")
+    if len(body.document_ids) > 500:
+        raise HTTPException(status_code=400, detail="Too many documents (max 500)")
+
+    target_kb: Optional[str] = (body.kb_id or "").strip() or None
+    if target_kb:
+        from core.db import knowledge_bases
+        kb_doc = await knowledge_bases.find_one({"id": target_kb}, {"_id": 0, "id": 1, "owner_id": 1})
+        if not kb_doc:
+            raise HTTPException(status_code=404, detail="Knowledge base not found")
+        if actor["role"] not in ("admin", "owner") and kb_doc["owner_id"] != actor["id"]:
+            raise HTTPException(status_code=403, detail="Not your knowledge base")
+
+    # Constrain to docs the actor is allowed to mutate.
+    scope: dict = {"id": {"$in": body.document_ids}}
+    if actor["role"] not in ("admin", "owner"):
+        scope["owner_id"] = actor["id"]
+
+    result = await documents.update_many(scope, {"$set": {"kb_id": target_kb}})
+
+    await log_event(
+        "document.bulk_assign_kb",
+        actor_id=actor["id"], actor_role=actor["role"],
+        resource_type="document",
+        resource_id=",".join(body.document_ids[:5]) + ("…" if len(body.document_ids) > 5 else ""),
+        ip=request.client.host if request.client else None,
+        metadata={
+            "kb_id": target_kb, "document_count": len(body.document_ids),
+            "matched": result.matched_count, "modified": result.modified_count,
+        },
+    )
+    return {
+        "ok": True,
+        "matched": result.matched_count,
+        "modified": result.modified_count,
+        "kb_id": target_kb,
+        "documents": body.document_ids,
     }
 
 
