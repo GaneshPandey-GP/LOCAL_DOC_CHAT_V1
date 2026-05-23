@@ -103,6 +103,21 @@ FEATURE_FLAGS = {
     "ENABLE_VISION_LLM_FOR_PDF_IMAGES": _bool_env("ENABLE_VISION_LLM_FOR_PDF_IMAGES", False),
     # --- Embeddable chat widget (Apr 2026) ---
     "ENABLE_EMBED_WIDGET": _bool_env("ENABLE_EMBED_WIDGET", True),
+    # --- Enterprise AI Platform (Module set, Mar 2026) ---
+    "ENABLE_QDRANT": _bool_env("ENABLE_QDRANT", True),
+    "ENABLE_QDRANT_HYBRID": _bool_env("ENABLE_QDRANT_HYBRID", True),
+    "ENABLE_SPARSE_VECTORS": _bool_env("ENABLE_SPARSE_VECTORS", True),
+    "ENABLE_WEB_CRAWLER": _bool_env("ENABLE_WEB_CRAWLER", True),
+    "ENABLE_PLAYWRIGHT_CRAWLER": _bool_env("ENABLE_PLAYWRIGHT_CRAWLER", False),
+    "ENABLE_BM25_SEARCH": _bool_env("ENABLE_BM25_SEARCH", True),
+    "ENABLE_RERANKER": _bool_env("ENABLE_RERANKER", False),
+    "ENABLE_QUERY_REWRITER": _bool_env("ENABLE_QUERY_REWRITER", False),
+    "ENABLE_HALLUCINATION_FILTER": _bool_env("ENABLE_HALLUCINATION_FILTER", False),
+    "ENABLE_CRAWL_SCHEDULER": _bool_env("ENABLE_CRAWL_SCHEDULER", True),
+    "ENABLE_WORKFLOW_ENGINE": _bool_env("ENABLE_WORKFLOW_ENGINE", False),
+    "ENABLE_MCP_TOOLS": _bool_env("ENABLE_MCP_TOOLS", True),
+    "ENABLE_API_KEYS": _bool_env("ENABLE_API_KEYS", True),
+    "ENABLE_MULTI_TENANT": _bool_env("ENABLE_MULTI_TENANT", False),
 }
 
 

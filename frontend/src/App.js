@@ -17,6 +17,11 @@ import EmbedWidget from "@/pages/EmbedWidget";
 import AdminFlags from "@/pages/AdminFlags";
 import ShareHistory from "@/pages/ShareHistory";
 import DBAgent from "@/pages/DBAgent";
+import KnowledgeBases from "@/pages/KnowledgeBases";
+import KnowledgeBaseDetail from "@/pages/KnowledgeBaseDetail";
+import KnowledgeBaseCrawl from "@/pages/KnowledgeBaseCrawl";
+import MCPTools from "@/pages/MCPTools";
+import ModelAnalytics from "@/pages/ModelAnalytics";
 
 import "@/App.css";
 
@@ -41,6 +46,10 @@ function App() {
                         <Route path="chat" element={<Chat />} />
                         <Route path="chat/:sessionId" element={<Chat />} />
                         <Route path="db-agent" element={<DBAgent />} />
+                        <Route path="kb" element={<KnowledgeBases />} />
+                        <Route path="kb/:kbId" element={<KnowledgeBaseDetail />} />
+                        <Route path="kb/:kbId/crawl" element={<KnowledgeBaseCrawl />} />
+                        <Route path="mcp" element={<MCPTools />} />
                         <Route path="shares" element={<ShareLinks />} />
                         <Route path="shares/history" element={<ShareHistory />} />
                         <Route path="embed-widget" element={<EmbedWidget />} />
@@ -49,6 +58,7 @@ function App() {
                         <Route path="admin/audit" element={<PrivateRoute requireRole="admin"><AdminAudit /></PrivateRoute>} />
                         <Route path="admin/users" element={<PrivateRoute requireRole="admin"><AdminUsers /></PrivateRoute>} />
                         <Route path="admin/flags" element={<PrivateRoute requireRole="admin"><AdminFlags /></PrivateRoute>} />
+                        <Route path="admin/model-analytics" element={<PrivateRoute requireRole="admin"><ModelAnalytics /></PrivateRoute>} />
                     </Route>
                     <Route path="*" element={<Navigate to="/login" replace />} />
                 </Routes>

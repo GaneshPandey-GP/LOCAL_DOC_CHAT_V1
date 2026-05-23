@@ -59,6 +59,24 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "db_agent_llm_model": "",
     "db_agent_llm_api_key": "",
     "db_agent_llm_base_url": "",
+    # ── Enterprise AI Platform (Mar 2026) ─────────────────────────────────
+    "qdrant_host": "qdrant",
+    "qdrant_port": 6333,
+    "qdrant_collection_prefix": "docchat",
+    "dense_model": "BAAI/bge-small-en-v1.5",
+    "sparse_model": "prithivida/Splade_PP_en_v1",
+    "hybrid_dense_weight": 0.7,
+    "hybrid_sparse_weight": 0.3,
+    "similarity_threshold": 0.5,
+    "retrieval_top_k": 5,
+    "reranker_model": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+    "reranker_top_n": 5,
+    "chunk_size": 1000,
+    "chunk_overlap": 200,
+    "crawl_rate_limit_rps": 2,
+    "crawl_max_depth": 3,
+    "crawl_max_pages": 200,
+    "crawl_user_agent": "DocChat-Crawler/1.0",
 }
 
 

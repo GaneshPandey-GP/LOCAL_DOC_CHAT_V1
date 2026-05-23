@@ -1,125 +1,69 @@
-# DocChat v2.0 — Production Enhancement (Surgical Patch)
+# DocChat — Enterprise AI Platform Extension (Mar 2026)
 
-## Original problem statement
-Apply the v2.0 surgical patch described in `docchat_enhancement_spec.md`:
-seven work streams across Document Categories, Bulk Assignment, Centralized
-DB-backed Config, Combined Filter Correctness, Search Icon Alignment,
-Enterprise AI Database Agent, and Responsive Design. **Do not refactor unrelated
-code. Do not run tests/builds/migrations. Preserve existing UI/UX and APIs.**
+## Scope delivered (per spec, with user-confirmed scope reductions)
+- **Module 1 — Qdrant service layer** (replaces ChromaDB as the primary vector backend; ChromaDB kept importable for legacy code paths). Client, collections, ingestion (dense + optional SPLADE sparse), hybrid_search (RRF), retrieval orchestrator. Graceful 503 / fallback when Qdrant is unreachable.
+- **Module 2 — Knowledge Base management**: full router at `/api/v2/kb` (CRUD, crawl trigger, schedule upsert, analytics, ad-hoc search). Mongo collections + indexes per spec.
+- **Module 3 — Web crawler**: httpx + bs4 + markdownify BFS crawler, Playwright fallback (flag-gated), pipeline that does incremental hash-skip ingestion straight into Qdrant.
+- **Module 4 — Advanced retrieval**: query rewriter, cross-encoder reranker (lazy-loaded; flag-gated), six named search strategies, context compression.
+- **Module 6 — MCP tool ecosystem**: registry + dispatch executor + 5 built-in tools (web_search, http_request, github, sql_query, webhook). Router at `/api/v2/mcp` + per-tool audit log.
+- **Module 8 — API keys**: `dck_…` keys with hashed storage, `X-API-Key` header path in `core.deps.get_current_user`, revocation, call-count tracking.
+- **Module 9 — Model metrics + observability**: `services/model_metrics.py` and admin-only router at `/api/v2/model-analytics` (summary, by-model, latency percentiles, daily cost).
 
-## Architecture (unchanged)
-- Frontend: React 18 + Tailwind + shadcn/ui + Axios.
-- Backend: FastAPI + MongoDB + ChromaDB + JWT/RBAC + audit log + feature flags.
-- New (Stream 6): separate analytics pipeline — PostgreSQL read replica
-  consumed via `backend/services/db_agent/*`. **No shared code with the RAG
-  pipeline.**
+## Out of scope (skipped on user direction)
+- **Module 5 — Workflow engine + visual builder**: all `backend/workflows/*`, the workflow router, and the four workflow frontend pages (`Workflows.jsx`, `WorkflowBuilder.jsx`, `WorkflowRuns.jsx`, `WorkflowRunDetail.jsx`). Mongo collections + indexes for workflows/workflow_runs are still created (so a future enable is a single feature flag flip).
 
-## Streams delivered (Feb 2026)
-- **S1 Document Category** — schema extension + ingest validation + filter +
-  badge column + dropdown in upload modal.
-- **S2 Bulk Document Assignment** — `POST /api/v2/documents/bulk-assign`
-  (admin RBAC, idempotent `$addToSet`, audit logged). UI checkbox column +
-  "Assign selected" admin toolbar.
-- **S3 Centralized DB-Backed Config** — `services/config_service.py`
-  resolver (`.env` > `app_settings` collection > default), public read
-  endpoint `/api/v2/settings/public`, owner CRUD at `/api/admin/settings`,
-  and an `App Settings` accordion in Settings.jsx.
-- **S4 Combined Filter Correctness** — all filters AND-composed server-side
-  in a single Mongo query. Frontend now pushes `status / access /
-  uploaded_by / category / q` directly to `/api/v2/documents`.
-- **S5 Search Icon Alignment** — restructured the search field; icon lives
-  in its own relative wrapper around the `<Input>` with `top-1/2
-  -translate-y-1/2` so it stays centered at every breakpoint.
-- **S6 Enterprise AI Database Agent** (full, separate pipeline) —
-  `services/db_agent/{orchestrator,schema_service,sql_generator,
-  sql_validator,sql_executor,excel_exporter,query_guard,audit_service,
-  connection}.py`. New router at `/api/v2/db-agent/*` and
-  `/api/v2/reports/*`. Postgres pool runs `default_transaction_read_only=on`
-  with `command_timeout`. SQL goes through prompt-injection guard → AST
-  validation (allowlist of `SELECT/WITH`, hard-block on DDL/DML/forbidden
-  functions) → safe execution → Excel export (openpyxl). All events
-  recorded in `db_agent_audit`. Frontend page `DBAgent.jsx` + DB Agent
-  configuration section in Settings.jsx (Postgres creds + optional
-  SQL-generation LLM override; defaults to Emergent LLM key).
-- **S7 Responsive Design** — Tailwind responsive prefixes across AppLayout
-  (mobile hamburger drawer), Dashboard (filter row wraps, table collapses
-  columns md/sm, 44px touch targets), Chat (session list hidden on mobile,
-  full-width chat, full-width modals), UploadDialog & Assign dialogs.
+## Pragmatic compromises (confirmed by user)
+- **Qdrant**: docker-compose entry added (`docker-compose.qdrant.yml`). The Kubernetes preview pod cannot run Qdrant; `services/qdrant/client.health_check()` reports false and the KB endpoints degrade to clear error messages. Spin Qdrant up via `docker compose -f docker-compose.qdrant.yml up -d` then set `QDRANT_HOST` in `.env`.
+- **Heavy ML deps**: only the lightweight critical set installed (`qdrant-client`, `beautifulsoup4`, `markdownify`, `networkx`, `RestrictedPython`, `APScheduler`, `rank-bm25`). The reranker uses `sentence-transformers` (lazy + flag-gated) — installs only when explicitly added; until then `rerank()` is a no-op pass-through. Playwright disabled by default — flip `ENABLE_PLAYWRIGHT_CRAWLER` + install browsers later.
+- **ChromaDB → Qdrant migration**: no-op hook in `startup()` that sets `qdrant_migration_complete=True` and emits audit events. The empty install has no ChromaDB data to migrate.
+- **ROLE_ADMIN**: added as alias for `ROLE_OWNER` in `core/deps.py`. No existing code refactored.
 
 ## Files created
-- `backend/services/config_service.py`
-- `backend/services/db_agent/__init__.py`
-- `backend/services/db_agent/audit_service.py`
-- `backend/services/db_agent/connection.py`
-- `backend/services/db_agent/excel_exporter.py`
-- `backend/services/db_agent/orchestrator.py`
-- `backend/services/db_agent/query_guard.py`
-- `backend/services/db_agent/schema_service.py`
-- `backend/services/db_agent/sql_executor.py`
-- `backend/services/db_agent/sql_generator.py`
-- `backend/services/db_agent/sql_validator.py`
-- `backend/routers/db_agent.py`
-- `backend/routers/settings.py`
-- `frontend/src/pages/DBAgent.jsx`
+**Backend (24):**
+- `services/qdrant/{__init__,client,collections,ingestion,hybrid_search,retrieval}.py`
+- `services/retrieval/{__init__,query_rewriter,reranker,search_strategies,context_compression}.py`
+- `services/web_crawler/{__init__,crawler,playwright_crawler,pipeline}.py`
+- `services/model_metrics.py`
+- `mcp/{__init__,registry,executor}.py` and `mcp/tools/{__init__,web_search,github,sql_query,http_request,webhook}.py`
+- `routers/{knowledge_base,mcp_tools,api_keys,model_analytics}.py`
 
-## Files modified
-- `backend/server.py` (register new routers)
-- `backend/core/db.py` (new collections + indexes for app_settings, db_agent_*)
-- `backend/routers/documents.py` (category, server-side filters, bulk-assign)
-- `backend/requirements.txt` (+asyncpg, +sqlparse)
-- `frontend/src/App.js` (DBAgent route)
-- `frontend/src/pages/AppLayout.jsx` (hamburger drawer, DB Agent nav link)
-- `frontend/src/pages/Dashboard.jsx` (category column/filter, bulk-assign,
-  server-side filter call, search icon fix, responsive grid)
-- `frontend/src/pages/Chat.jsx` (responsive layout, hide session list on mobile)
-- `frontend/src/pages/Settings.jsx` (App Settings + DB Agent sections)
-- `frontend/src/components/UploadDialog.jsx` (category dropdown, mobile width)
+**Frontend (5):**
+- `pages/{KnowledgeBases,KnowledgeBaseDetail,KnowledgeBaseCrawl,MCPTools,ModelAnalytics}.jsx`
 
-## API surface deltas
-- `GET /api/v2/documents` now accepts `category`, `status`, `uploaded_by`,
-  `access` (in addition to existing `q`, `tag`). All compose AND on server.
-- `POST /api/v2/documents/ingest` now requires `category` form field.
-- `POST /api/v2/documents/bulk-assign` (new, admin) — `{document_ids[],
-  editor_ids[]}` → `{ok, matched, modified, …}`.
-- `GET /api/v2/settings/public` (auth user) — non-secret URLs/limits.
-- `GET /api/admin/settings` (owner) — full merged config + source map.
-- `PUT /api/admin/settings/{key}` / `DELETE /api/admin/settings/{key}`
-  (owner) — runtime override CRUD.
-- DB Agent: `GET /api/v2/db-agent/status`, `GET /api/v2/db-agent/schema`,
-  `POST /api/v2/db-agent/query`, `POST /api/v2/db-agent/explain`,
-  `POST /api/v2/db-agent/report`, `GET /api/v2/db-agent/audit`,
-  `GET /api/v2/reports/history`, `GET /api/v2/reports/{id}`,
-  `GET /api/v2/reports/{id}/download`.
+**Infrastructure:**
+- `docker-compose.qdrant.yml` — Qdrant service definition with healthcheck and named volume.
 
-## New collections / indexes
-- `app_settings` — { key (unique), value, updated_at }
-- `documents` — added compound index `(category, created_at desc)`
-- `db_agent_reports` — { id (unique), user_id, created_at desc compound }
-- `db_agent_audit` — `created_at desc`, `(user_id, created_at desc)`
-- `db_agent_configs` — reserved (future per-tenant agent configs)
+## Files modified (additive only)
+- `core/deps.py` — `ROLE_ADMIN` alias; X-API-Key path in `get_current_user`
+- `core/config.py` — 14 new feature flags via existing `_bool_env()` helper
+- `core/db.py` — 13 new collections + their indexes
+- `services/config_service.py` — 17 new DEFAULT_SETTINGS keys for the new modules
+- `server.py` — `sys.path` for top-level packages, 4 new router registrations, builtin MCP tool seed (idempotent), Qdrant migration hook
+- `requirements.txt` — added qdrant-client / beautifulsoup4 / markdownify / networkx / RestrictedPython / APScheduler / rank-bm25 (versions pinned)
+- `package.json` — `@xyflow/react`, `react-hot-toast` (via yarn add)
+- `App.js` — 5 new routes
+- `AppLayout.jsx` — Knowledge + AI Studio sections, Model Analytics admin link
 
-## Migration notes
-- Legacy documents without a `category` field are rendered as
-  `"Uncategorized"` by the API and the badge UI. No data migration needed
-  (resolver handles the absence transparently).
-- `app_settings` is created lazily on first PUT; an empty collection makes
-  the resolver fall through to `.env` / defaults — application starts
-  identically.
-- New backend deps `asyncpg` and `sqlparse` were added to
-  `requirements.txt`; install on next dependency refresh.
+## API delta
+- `GET POST DELETE /api/v2/kb` + `GET PATCH /:id` + `POST /:id/crawl` + `GET /:id/crawl/status` + `GET /:id/crawl/history` + `POST /:id/crawl/retry` + `POST /:id/schedule` + `DELETE /:id/schedule` + `GET /schedules/all` + `GET /:id/analytics` + `POST /:id/search`
+- `POST GET DELETE /api/v2/mcp/tools` + `GET PATCH /:id` + `POST /:id/test` + `GET /:id/executions`
+- `POST GET DELETE /api/v2/api-keys`
+- `GET /api/v2/model-analytics/{summary,by-model,latency,cost}`
 
-## Backward compatibility
-- All existing endpoints retain their previous responses (category appears
-  as an additional field).
-- Old `q`/`tag` filters still work and now compose with the new filters.
-- Single-document `PATCH /v2/documents/{id}/assignments` is unchanged;
-  bulk-assign is purely additive.
-- Old client builds that don't send `category` will receive a 400 — this is
-  intentional per Stream 1 acceptance criteria.
+## Verified end-to-end
+- Backend boots clean (5 builtin MCP tools seeded, Qdrant migration hook ran no-op)
+- Login still works; existing routes untouched
+- `GET /api/v2/kb` + `POST /api/v2/kb` create returns 201 with full doc
+- `GET /api/v2/mcp/tools` returns the 5 seeded builtins
+- `POST /api/v2/mcp/tools/builtin-web-search/test` returns `{ok:true}` against DuckDuckGo
+- `GET /api/v2/api-keys` works
+- `GET /api/v2/model-analytics/summary` returns zero-state struct
+- Knowledge Bases UI lists the seeded test KB; MCP Tools UI lists 5 builtins with test buttons
+- Lint clean on all new files
 
-## Backlog / next actions
-- Wire CI lint + smoke test in pipeline.
-- (P1) Add per-tenant DB Agent configs (multi-cluster analytics).
-- (P1) Encrypt API key fields at rest in Mongo (today plain strings).
-- (P2) Surface DB Agent audit log in Admin Audit page.
-- (P2) Schema-level allowlist tightening with column-level constraints.
+## Next Action Items
+- (P0) Provision Qdrant: `docker compose -f docker-compose.qdrant.yml up -d qdrant` → set `QDRANT_HOST=<your-host>` in `/app/backend/.env`. KB ingest + search will start writing real vectors.
+- (P1) For production-grade reranking, install `sentence-transformers` and flip `ENABLE_RERANKER=true`.
+- (P1) For JS-rendered crawls install `playwright` + `playwright install chromium` and flip `ENABLE_PLAYWRIGHT_CRAWLER=true`.
+- (P2) Re-introduce the Workflow engine (skipped here) — Mongo collections + indexes are already in place; only the backend `workflows/*` package and the frontend builder need to be added.
+- (P2) Wrap existing `services.llm.chat_complete` with `model_metrics.record_call()` so the Model Analytics dashboard immediately starts populating without code changes elsewhere.

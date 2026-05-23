@@ -7,6 +7,8 @@ from .db import users
 from .security import decode_token, decode_guest_token
 
 ROLE_OWNER = "admin"
+# Module-9 prompt: canonical admin constant going forward.
+ROLE_ADMIN = ROLE_OWNER
 ROLE_EDITOR = "editor"
 ROLE_GUEST = "guest"
 
@@ -26,7 +28,34 @@ def _extract_bearer(authorization: Optional[str]) -> Optional[str]:
     return None
 
 
-async def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
+async def get_current_user(
+    authorization: Optional[str] = Header(None),
+    x_api_key: Optional[str] = Header(None),
+) -> dict:
+    # API key path (Module 8) — checked before JWT so non-interactive clients
+    # can use the X-API-Key header without a Bearer token.
+    if x_api_key:
+        from .db import db as _db  # local import to avoid circular at startup
+        import hashlib
+        key_hash = hashlib.sha256(x_api_key.encode("utf-8")).hexdigest()
+        rec = await _db.api_keys.find_one(
+            {"key_hash": key_hash, "revoked": {"$ne": True}},
+            {"_id": 0},
+        )
+        if rec:
+            user = await users.find_one({"id": rec["owner_id"]}, {"_id": 0, "password_hash": 0})
+            if user:
+                # bump last_used asynchronously — best-effort, not blocking
+                try:
+                    await _db.api_keys.update_one(
+                        {"key_hash": key_hash},
+                        {"$set": {"last_used_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()},
+                         "$inc": {"call_count": 1}},
+                    )
+                except Exception:
+                    pass
+                return user
+
     token = _extract_bearer(authorization)
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing token")

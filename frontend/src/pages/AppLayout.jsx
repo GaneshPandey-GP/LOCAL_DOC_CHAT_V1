@@ -17,6 +17,9 @@ import {
     List as Hamburger,
     X,
     Database,
+    BookOpen,
+    Wrench,
+    ChartBar,
 } from "@phosphor-icons/react";
 
 function NavItem({ to, end, icon: Icon, label, testId, onNavigate }) {
@@ -78,6 +81,12 @@ export default function AppLayout() {
                 <NavItem to="/app/shares/history" icon={ClockCounterClockwise} label="Share Link History" testId="nav-share-history" onNavigate={closeMobile} />
                 <NavItem to="/app/embed-widget" icon={Code} label="Embed widget" testId="nav-embed-widget" onNavigate={closeMobile} />
 
+                <div className="dc-overline px-5 mb-2 mt-6">Knowledge</div>
+                <NavItem to="/app/kb" icon={BookOpen} label="Knowledge Bases" testId="nav-kb" onNavigate={closeMobile} />
+
+                <div className="dc-overline px-5 mb-2 mt-6">AI Studio</div>
+                <NavItem to="/app/mcp" icon={Wrench} label="MCP Tools" testId="nav-mcp" onNavigate={closeMobile} />
+
                 {isAdmin && (
                     <>
                         <div className="dc-overline px-5 mb-2 mt-6">Admin</div>
@@ -85,6 +94,7 @@ export default function AppLayout() {
                         <NavItem to="/app/admin/audit" icon={ListMagnifyingGlass} label="Audit log" testId="nav-admin-audit" onNavigate={closeMobile} />
                         <NavItem to="/app/admin/users" icon={UsersThree} label="Users" testId="nav-admin-users" onNavigate={closeMobile} />
                         <NavItem to="/app/admin/flags" icon={ToggleRight} label="Feature flags" testId="nav-admin-flags" onNavigate={closeMobile} />
+                        <NavItem to="/app/admin/model-analytics" icon={ChartBar} label="Model Analytics" testId="nav-model-analytics" onNavigate={closeMobile} />
                     </>
                 )}
 

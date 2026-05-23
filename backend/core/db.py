@@ -34,6 +34,21 @@ db_agent_reports = db.db_agent_reports
 db_agent_audit = db.db_agent_audit
 db_agent_configs = db.db_agent_configs
 
+# ── Enterprise AI Platform (Mar 2026) ────────────────────────────────────────
+knowledge_bases = db.knowledge_bases
+crawl_jobs = db.crawl_jobs
+crawl_history = db.crawl_history
+sync_schedules = db.sync_schedules
+workflows = db.workflows
+workflow_runs = db.workflow_runs
+mcp_tools = db.mcp_tools
+tool_executions = db.tool_executions
+agent_memory = db.agent_memory
+api_keys = db.api_keys
+integrations = db.integrations
+model_metrics = db.model_metrics
+webhooks = db.webhooks
+
 
 async def init_indexes():
     """Create indexes for common queries."""
@@ -66,3 +81,27 @@ async def init_indexes():
     await db_agent_audit.create_index([("created_at", -1)])
     await db_agent_audit.create_index([("user_id", 1), ("created_at", -1)])
     await db_agent_configs.create_index("key", unique=True)
+    # ── Enterprise AI Platform indexes ──────────────────────────────────────
+    await knowledge_bases.create_index("id", unique=True)
+    await knowledge_bases.create_index([("owner_id", 1), ("created_at", -1)])
+    await knowledge_bases.create_index("type")
+    await crawl_jobs.create_index("id", unique=True)
+    await crawl_jobs.create_index([("kb_id", 1), ("status", 1)])
+    await crawl_jobs.create_index([("kb_id", 1), ("started_at", -1)])
+    await crawl_history.create_index([("kb_id", 1), ("url", 1)])
+    await crawl_history.create_index("content_hash")
+    await sync_schedules.create_index("kb_id", unique=True)
+    await workflows.create_index("id", unique=True)
+    await workflows.create_index([("owner_id", 1), ("created_at", -1)])
+    await workflow_runs.create_index("id", unique=True)
+    await workflow_runs.create_index([("workflow_id", 1), ("status", 1)])
+    await workflow_runs.create_index([("workflow_id", 1), ("started_at", -1)])
+    await mcp_tools.create_index("id", unique=True)
+    await mcp_tools.create_index([("owner_id", 1), ("enabled", 1)])
+    await tool_executions.create_index([("run_id", 1), ("node_id", 1)])
+    await agent_memory.create_index([("session_id", 1), ("key", 1)])
+    await api_keys.create_index("key_hash", unique=True)
+    await api_keys.create_index("owner_id")
+    await model_metrics.create_index([("model_id", 1), ("created_at", -1)])
+    await webhooks.create_index("id", unique=True)
+    await webhooks.create_index("owner_id")

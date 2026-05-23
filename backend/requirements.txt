@@ -155,3 +155,12 @@ zipp==3.23.0
 anthropic>=0.40.0
 asyncpg==0.30.0
 sqlparse==0.5.3
+
+# Enterprise AI Platform (Mar 2026) — Qdrant + crawler + retrieval + workflow runtime deps
+APScheduler==3.11.2
+beautifulsoup4==4.14.3
+markdownify==1.2.2
+networkx==3.6.1
+qdrant-client==1.18.0
+rank-bm25==0.2.2
+RestrictedPython==8.1
