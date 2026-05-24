@@ -297,6 +297,57 @@ export default function KnowledgeBaseDetail() {
                     </div>
                 )}
             </div>
+
+            {/* Reuse the existing UploadDialog with this KB pre-selected & locked. */}
+            <UploadDialog
+                open={uploadOpen}
+                onOpenChange={setUploadOpen}
+                onUploaded={refreshDocs}
+                defaultKbId={kbId}
+            />
+
+            {/* "Add existing documents" — pick from your unassigned docs. */}
+            {movePickerOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" data-testid="kb-move-picker"
+                     onClick={() => !moving && setMovePickerOpen(false)}>
+                    <div className="bg-background border border-border w-full max-w-lg max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+                        <div className="px-4 py-3 border-b border-border">
+                            <div className="font-heading font-bold text-lg">Add existing documents</div>
+                            <div className="text-xs text-muted-foreground mt-0.5">Showing documents not yet assigned to any KB.</div>
+                        </div>
+                        <div className="flex-1 overflow-auto">
+                            {unassigned.length === 0 ? (
+                                <div className="p-6 text-center text-sm text-muted-foreground">
+                                    No unassigned documents — upload new ones or remove docs from another KB first.
+                                </div>
+                            ) : unassigned.map((d) => (
+                                <label key={d.id} className="flex items-center gap-3 px-4 py-2.5 border-b border-border last:border-b-0 cursor-pointer hover:bg-secondary/30"
+                                       data-testid={`kb-move-row-${d.id}`}>
+                                    <input
+                                        type="checkbox"
+                                        className="w-4 h-4 accent-brand-primary"
+                                        checked={pickedIds.includes(d.id)}
+                                        onChange={() => setPickedIds((ids) => ids.includes(d.id) ? ids.filter(x => x !== d.id) : [...ids, d.id])}
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                        <div className="text-sm font-medium truncate">{d.filename}</div>
+                                        <div className="text-[10px] font-mono text-muted-foreground">
+                                            {d.file_type} · {d.chunk_count} chunks · {new Date(d.created_at).toLocaleDateString()}
+                                        </div>
+                                    </div>
+                                    <Badge variant="outline" className="text-[10px] font-mono">{d.category || "Uncategorized"}</Badge>
+                                </label>
+                            ))}
+                        </div>
+                        <div className="px-4 py-3 border-t border-border flex justify-end gap-2">
+                            <Button variant="outline" onClick={() => setMovePickerOpen(false)} disabled={moving}>Cancel</Button>
+                            <Button onClick={confirmMove} disabled={moving || !pickedIds.length} data-testid="kb-move-confirm">
+                                {moving ? "Moving…" : `Add ${pickedIds.length} document(s)`}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -35,6 +35,7 @@ import {
     ArrowClockwise,
     Eye,
     UserPlus,
+    BookOpen,
 } from "@phosphor-icons/react";
 
 const IconForFile = ({ filename }) => {
@@ -72,11 +73,17 @@ export default function Dashboard() {
     const [accessFilter, setAccessFilter] = useState("all"); // all | self | assigned
     const [statusFilter, setStatusFilter] = useState("all"); // all | ready | processing | failed
     const [categoryFilter, setCategoryFilter] = useState("all"); // Stream 1
+    const [kbFilter, setKbFilter] = useState("all");             // Mar 2026 — KB scope filter
+    const [knowledgeBases, setKnowledgeBases] = useState([]);
 
     // Stream 2 — bulk assignment modal state
     const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
     const [bulkSelection, setBulkSelection] = useState([]);
     const [bulkBusy, setBulkBusy] = useState(false);
+    // Mar 2026 — bulk move-to-KB modal state
+    const [bulkKbOpen, setBulkKbOpen] = useState(false);
+    const [bulkKbTarget, setBulkKbTarget] = useState("__none__");
+    const [bulkKbBusy, setBulkKbBusy] = useState(false);
 
     const load = async () => {
         try {
@@ -87,6 +94,7 @@ export default function Dashboard() {
             if (accessFilter !== "all") params.access = accessFilter;
             if (uploaderFilter !== "all") params.uploaded_by = uploaderFilter;
             if (categoryFilter !== "all") params.category = categoryFilter;
+            if (kbFilter !== "all") params.kb_id = kbFilter;
             const r = await api.get("/v2/documents", { params });
             setDocs(r.data);
         } finally {
@@ -94,13 +102,17 @@ export default function Dashboard() {
         }
     };
 
-    useEffect(() => { load(); }, []);
+    useEffect(() => {
+        load();
+        // Pull KBs once for the filter + bulk-move target picker.
+        api.get("/v2/kb").then(r => setKnowledgeBases(r.data || [])).catch(() => {});
+    }, []);
     useEffect(() => {
         // Debounce all filter+search changes into one server call (Stream 4).
         const id = setTimeout(load, 200);
         return () => clearTimeout(id);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [q, statusFilter, accessFilter, uploaderFilter, categoryFilter]);
+    }, [q, statusFilter, accessFilter, uploaderFilter, categoryFilter, kbFilter]);
 
     // Owners need the editor list to assign documents
     useEffect(() => {
@@ -252,6 +264,28 @@ export default function Dashboard() {
         }
     };
 
+    const submitBulkKb = async () => {
+        if (!selected.length) { toast.error("Pick at least one document"); return; }
+        setBulkKbBusy(true);
+        try {
+            const target = bulkKbTarget === "__none__" ? null : bulkKbTarget;
+            const r = await api.post("/v2/documents/bulk-assign-kb", {
+                document_ids: selected,
+                kb_id: target,
+            });
+            toast.success(target
+                ? `Moved ${r.data.matched} doc(s) into the knowledge base`
+                : `Removed ${r.data.matched} doc(s) from their knowledge base`);
+            setBulkKbOpen(false);
+            setSelected([]);
+            load();
+        } catch (e) {
+            toast.error(e?.response?.data?.detail || "Move failed");
+        } finally {
+            setBulkKbBusy(false);
+        }
+    };
+
     return (
         <div>
             <header className="h-auto md:h-16 border-b border-border px-4 md:px-8 py-3 md:py-0 flex flex-col md:flex-row md:items-center justify-between gap-3 sticky top-0 bg-background z-10">
@@ -265,6 +299,14 @@ export default function Dashboard() {
                             <span className="text-sm text-muted-foreground" data-testid="selection-count">{selected.length} selected</span>
                             <Button variant="outline" onClick={chatSelected} data-testid="chat-selected-button" className="min-h-[44px] md:min-h-0">
                                 <ChatCircle size={16} /> Chat with selected
+                            </Button>
+                            <Button
+                                variant="outline"
+                                onClick={() => { setBulkKbTarget("__none__"); setBulkKbOpen(true); }}
+                                data-testid="bulk-kb-button"
+                                className="min-h-[44px] md:min-h-0"
+                            >
+                                <BookOpen size={16} /> Move to KB
                             </Button>
                             {isOwner && (
                                 <Button
@@ -319,6 +361,22 @@ export default function Dashboard() {
                                 <SelectItem value="Uncategorized">Uncategorized</SelectItem>
                                 {DOCUMENT_CATEGORIES.map((c) => (
                                     <SelectItem key={c} value={c}>{c}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    {/* Mar 2026 — KB scope filter */}
+                    <div className="w-full sm:w-[180px]">
+                        <Label className="dc-overline">Knowledge Base</Label>
+                        <Select value={kbFilter} onValueChange={setKbFilter}>
+                            <SelectTrigger className="mt-1 h-9" data-testid="document-filter-kb">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All</SelectItem>
+                                <SelectItem value="none">No KB (unassigned)</SelectItem>
+                                {knowledgeBases.map((kb) => (
+                                    <SelectItem key={kb.id} value={kb.id}>{kb.name}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
@@ -519,6 +577,39 @@ export default function Dashboard() {
             </div>
 
             <UploadDialog open={uploadOpen} onOpenChange={setUploadOpen} onUploaded={load} />
+
+            {/* Mar 2026 — Bulk move-to-KB dialog (any role can move their own docs). */}
+            <Dialog open={bulkKbOpen} onOpenChange={setBulkKbOpen}>
+                <DialogContent data-testid="bulk-kb-dialog" className="w-[calc(100vw-1.5rem)] max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="font-heading text-2xl">Move {selected.length} document(s) to a knowledge base</DialogTitle>
+                        <DialogDescription>
+                            Pick the target KB or "No KB" to remove the association.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-3 mt-1">
+                        <Label className="dc-overline">Knowledge Base</Label>
+                        <Select value={bulkKbTarget} onValueChange={setBulkKbTarget}>
+                            <SelectTrigger className="h-9" data-testid="bulk-kb-target"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="__none__">No KB (unassign)</SelectItem>
+                                {knowledgeBases.map(kb => (
+                                    <SelectItem key={kb.id} value={kb.id}>{kb.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        {knowledgeBases.length === 0 && (
+                            <div className="text-xs text-muted-foreground">No knowledge bases yet — create one from the Knowledge Bases page.</div>
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setBulkKbOpen(false)} disabled={bulkKbBusy}>Cancel</Button>
+                        <Button onClick={submitBulkKb} disabled={bulkKbBusy} data-testid="bulk-kb-submit">
+                            {bulkKbBusy ? "Moving…" : "Move"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Stream 2 — Bulk assign dialog (admin only). Reuses the editors list. */}
             <Dialog open={bulkAssignOpen} onOpenChange={setBulkAssignOpen}>
