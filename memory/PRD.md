@@ -61,6 +61,11 @@
 - Knowledge Bases UI lists the seeded test KB; MCP Tools UI lists 5 builtins with test buttons
 - Lint clean on all new files
 
+## 2026-05-24 — Phase 1+2+3 Verification (this session)
+- Configured Qdrant embedded mode by setting `qdrant_host = /app/backend/qdrant_data` in `app_settings` so KB features work in the preview pod without a separate Qdrant container.
+- End-to-end live crawl of https://example.com succeeded: pages_crawled=1, chunks_added=1 ingested to embedded Qdrant; hybrid search returned the crawled content with score 0.72.
+- Testing agent ran the full regression suite at `/app/backend/tests/test_enterprise_ai.py` — **24/24 backend tests pass (100%)** across Auth, KB CRUD, KB search (vector/hybrid/bm25/ensemble), live crawl, MCP built-ins, MCP custom CRUD, API key issuance/auth/revocation, model analytics endpoints, RBAC alias.
+
 ## Next Action Items
 - (P0) Provision Qdrant: `docker compose -f docker-compose.qdrant.yml up -d qdrant` → set `QDRANT_HOST=<your-host>` in `/app/backend/.env`. KB ingest + search will start writing real vectors.
 - (P1) For production-grade reranking, install `sentence-transformers` and flip `ENABLE_RERANKER=true`.
