@@ -1,0 +1,34 @@
+{
+  "summary": "All 24 backend pytest cases pass (100%). Verified Auth, KB CRUD, KB search across all 4 modes (vector/hybrid/bm25/ensemble), end-to-end web crawl on https://example.com (status reached `completed`, content searchable via hybrid search, also surfaced via legacy /api/v2/documents as file_type=web), crawl history, MCP listing of 5 built-ins, MCP built-in execution (web-search & http-request returning ok=true with HTTP 200), MCP custom tool create+delete, API Key issuance + X-API-Key auth + post-revoke rejection, Model analytics 4 admin endpoints, and RBAC alias (ROLE_ADMIN == 'admin' allowed on schedules/all). Qdrant embedded mode at /app/backend/qdrant_data is operational — crawl preflight returned 200 (would have returned 503 only if unreachable). Legacy regression smoke-checked: /api/v2/documents and /api/v2/sessions respond 200 with expected data.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_enterprise_ai.py",
+    "/app/test_reports/pytest/iter_enterprise.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "knowledge_base.py crawl preflight returns 503 with a message recommending docker-compose, but in embedded mode users would still get a generic 503 if the embedded path was wrong — consider differentiating 'embedded init failed' vs 'server unreachable' messaging.",
+    "api_keys.py revoke endpoint returns 200 but list endpoint still returns the revoked row with revoked=true; consider hiding revoked keys behind a query flag for cleaner UI.",
+    "knowledge_base.py update_kb silently no-ops when no fields are provided (returns the existing doc) — fine, but consider 400 to make API contracts clearer."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_enterprise_ai.py"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "not_tested"
+  },
+  "test_credentials": "admin@docchat.app / Admin@12345 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Two ephemeral KBs created and cleaned up by session-scope fixtures: TEST_KB_doc, TEST_KB_web. One ephemeral MCP tool TEST_custom_http (deleted). One ephemeral API key TEST_key (revoked).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Test file /app/backend/tests/test_enterprise_ai.py is the regression suite. It depends on REACT_APP_BACKEND_URL from /app/frontend/.env. Crawler test hits https://example.com — if outbound blocked, that test will fail. Qdrant embedded path: /app/backend/qdrant_data. Built-in MCP tools are seeded on backend startup (see server.py L115-153)."
+}

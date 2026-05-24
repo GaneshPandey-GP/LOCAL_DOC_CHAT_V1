@@ -60,7 +60,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "db_agent_llm_api_key": "",
     "db_agent_llm_base_url": "",
     # ── Enterprise AI Platform (Mar 2026) ─────────────────────────────────
-    "qdrant_host": "qdrant",
+    "qdrant_host": "/app/backend/uploads/qdrant_local",
     "qdrant_port": 6333,
     "qdrant_collection_prefix": "docchat",
     "dense_model": "BAAI/bge-small-en-v1.5",

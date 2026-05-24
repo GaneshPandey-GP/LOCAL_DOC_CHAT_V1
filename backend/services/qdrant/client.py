@@ -27,21 +27,45 @@ _client_addr: Optional[str] = None
 
 
 async def get_client() -> "AsyncQdrantClient":
+    """Return the cached client. Supports two modes:
+
+      • **Server mode** (default): when `qdrant_host` is a plain hostname/IP,
+        we open a normal HTTP connection (Qdrant container running separately).
+      • **Embedded mode**: when `qdrant_host` starts with `/`, `./`, or equals
+        `:memory:`, we run Qdrant in-process via the local-mode driver bundled
+        with `qdrant-client`. RocksDB-backed when a path is given, ephemeral
+        when `:memory:` is given. No server required.
+
+    Embedded mode is what lets the preview pod work without a docker-compose
+    Qdrant container.  Switch to remote by setting `qdrant_host` to a hostname
+    in Settings → App Settings (or via env).
+    """
     global _client, _client_addr
     if not _QDRANT_AVAILABLE:
         raise RuntimeError("qdrant-client is not installed")
-    host = await config_service.get_setting("qdrant_host", "qdrant")
+    host = str(await config_service.get_setting("qdrant_host", "qdrant"))
     port = int(await config_service.get_setting("qdrant_port", 6333))
-    addr = f"{host}:{port}"
+
+    is_embedded = host.startswith("/") or host.startswith("./") or host == ":memory:"
+    addr = host if is_embedded else f"{host}:{port}"
+
     if _client is None or _client_addr != addr:
         if _client is not None:
             try:
                 await _client.close()
             except Exception:
                 pass
-        _client = AsyncQdrantClient(host=host, port=port, prefer_grpc=False, timeout=10)
+        if is_embedded:
+            # Ensure the on-disk directory exists for path-mode
+            if host != ":memory:":
+                from pathlib import Path as _P
+                _P(host).mkdir(parents=True, exist_ok=True)
+            _client = AsyncQdrantClient(path=host)
+            logger.info("Qdrant client (embedded) → %s", addr)
+        else:
+            _client = AsyncQdrantClient(host=host, port=port, prefer_grpc=False, timeout=10)
+            logger.info("Qdrant client (server) → %s", addr)
         _client_addr = addr
-        logger.info("Qdrant client connected → %s", addr)
     return _client
 
 
