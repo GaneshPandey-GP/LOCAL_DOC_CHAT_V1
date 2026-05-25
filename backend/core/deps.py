@@ -68,9 +68,12 @@ async def get_current_user(
     return user
 
 
-async def get_optional_user(authorization: Optional[str] = Header(None)) -> Optional[dict]:
+async def get_optional_user(
+    authorization: Optional[str] = Header(None),
+    x_api_key: Optional[str] = Header(None),
+) -> Optional[dict]:
     try:
-        return await get_current_user(authorization=authorization)
+        return await get_current_user(authorization=authorization, x_api_key=x_api_key)
     except HTTPException:
         return None
 
