@@ -22,6 +22,7 @@ import KnowledgeBaseDetail from "@/pages/KnowledgeBaseDetail";
 import KnowledgeBaseCrawl from "@/pages/KnowledgeBaseCrawl";
 import MCPTools from "@/pages/MCPTools";
 import ModelAnalytics from "@/pages/ModelAnalytics";
+import Workflows from "@/pages/Workflows";
 
 import "@/App.css";
 
@@ -50,6 +51,10 @@ function App() {
                         <Route path="kb/:kbId" element={<KnowledgeBaseDetail />} />
                         <Route path="kb/:kbId/crawl" element={<KnowledgeBaseCrawl />} />
                         <Route path="mcp" element={<MCPTools />} />
+                        <Route path="workflows" element={<Workflows />} />
+                        <Route path="workflows/:wfId/builder" element={<Workflows />} />
+                        <Route path="workflows/:wfId/runs" element={<Workflows />} />
+                        <Route path="workflows/runs/:runId" element={<Workflows />} />
                         <Route path="shares" element={<ShareLinks />} />
                         <Route path="shares/history" element={<ShareHistory />} />
                         <Route path="embed-widget" element={<EmbedWidget />} />

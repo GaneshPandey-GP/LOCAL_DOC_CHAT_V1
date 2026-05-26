@@ -130,10 +130,14 @@ export default function Chat() {
     const [followups, setFollowups] = useState([]);
     const [feedbackMap, setFeedbackMap] = useState({});
     const [docCount, setDocCount] = useState(0);
+    const [mcpTools, setMcpTools] = useState([]);
+    const [selectedToolIds, setSelectedToolIds] = useState([]);
+    const [toolsOpen, setToolsOpen] = useState(false);
     const bottomRef = useRef(null);
 
     useEffect(() => {
         api.get("/v2/documents").then((r) => setDocCount(r.data.filter((d) => d.status === "ready").length)).catch(() => {});
+        api.get("/v2/mcp/tools").then(r => setMcpTools((r.data || []).filter(t => t.enabled !== false))).catch(() => {});
     }, []);
 
     useEffect(() => {
@@ -167,24 +171,26 @@ export default function Chat() {
         const userMsg = { id: `u-${Date.now()}`, role: "user", content: text };
         setMessages((m) => [...m, userMsg]);
 
-        const assistantDraft = { id: `a-${Date.now()}`, role: "assistant", content: "", citations: [], confidence: null, streaming: true };
+        const assistantDraft = { id: `a-${Date.now()}`, role: "assistant", content: "", citations: [], confidence: null, tool_calls: [], streaming: true };
         setMessages((m) => [...m, assistantDraft]);
         setStreaming(true);
 
         try {
             const token = localStorage.getItem("dc_access_token");
+            const body = {
+                query: text,
+                session_id: sessionId,
+                document_ids: docIds,
+                stream: true,
+            };
+            if (selectedToolIds.length) body.mcp_tool_ids = selectedToolIds;
             const resp = await fetch(`${API_BASE}/v2/chat`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${token}`,
                 },
-                body: JSON.stringify({
-                    query: text,
-                    session_id: sessionId,
-                    document_ids: docIds,
-                    stream: true,
-                }),
+                body: JSON.stringify(body),
             });
             if (!resp.ok) {
                 const err = await resp.json().catch(() => ({}));
@@ -217,6 +223,10 @@ export default function Chat() {
                             newSessionId = payload.session_id;
                             setMessages((m) => m.map((mm) => mm.id === assistantDraft.id
                                 ? { ...mm, citations: payload.citations, confidence: payload.confidence }
+                                : mm));
+                        } else if (eventType === "tool_calls") {
+                            setMessages((m) => m.map((mm) => mm.id === assistantDraft.id
+                                ? { ...mm, tool_calls: payload.tool_calls || [] }
                                 : mm));
                         } else if (eventType === "token") {
                             setMessages((m) => m.map((mm) => mm.id === assistantDraft.id
@@ -368,6 +378,23 @@ export default function Chat() {
                                                 </span>
                                             )}
                                         </div>
+                                        {(m.tool_calls?.length || 0) > 0 && (
+                                            <details className="mb-3 border border-border bg-secondary/30" data-testid={`tool-calls-${m.id}`}>
+                                                <summary className="px-3 py-1.5 text-xs font-mono cursor-pointer select-none">⚙ {m.tool_calls.length} tool{m.tool_calls.length > 1 ? "s" : ""} used</summary>
+                                                <div className="px-3 py-2 space-y-2">
+                                                    {m.tool_calls.map((tc, i) => (
+                                                        <div key={i} className="text-xs font-mono border-t border-border pt-1.5 first:border-t-0 first:pt-0">
+                                                            <div className="flex items-center justify-between flex-wrap gap-2">
+                                                                <span className="font-bold">{tc.tool_name}</span>
+                                                                <span className="text-muted-foreground">{tc.elapsed_ms || 0}ms</span>
+                                                            </div>
+                                                            <div className="text-muted-foreground truncate">in: {typeof tc.input === "string" ? tc.input : JSON.stringify(tc.input)}</div>
+                                                            <div className="text-muted-foreground truncate">out: {tc.result_preview || (typeof tc.result === "string" ? tc.result : JSON.stringify(tc.result))?.slice(0, 200)}</div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </details>
+                                        )}
                                         <MarkdownMessage content={m.content} citations={m.citations || []} onCite={setActiveCite} />
                                         {m.streaming && <span className="dc-cursor" />}
 
@@ -470,9 +497,38 @@ export default function Chat() {
                             className="resize-none font-sans"
                             data-testid="chat-input"
                         />
-                        <Button type="submit" disabled={streaming || !input.trim() || docCount === 0} className="h-11 min-w-[44px]" data-testid="chat-send-button">
-                            <PaperPlaneRight size={16} weight="fill" />
-                        </Button>
+                        <div className="flex flex-col gap-1.5 items-stretch">
+                            {mcpTools.length > 0 && (
+                                <div className="relative">
+                                    <Button type="button" size="sm" variant={selectedToolIds.length ? "default" : "outline"}
+                                        className="h-8 text-xs px-2.5" onClick={() => setToolsOpen(o => !o)} data-testid="chat-tools-toggle">
+                                        ⚙ Tools{selectedToolIds.length ? ` (${selectedToolIds.length})` : ""}
+                                    </Button>
+                                    {toolsOpen && (
+                                        <div className="absolute bottom-10 right-0 w-72 max-h-72 overflow-auto border border-border bg-background shadow-xl z-30 p-2" data-testid="chat-tools-popover">
+                                            <div className="dc-overline mb-2">Available MCP Tools</div>
+                                            {mcpTools.map(t => (
+                                                <label key={t.id} className="flex items-center gap-2 px-1 py-1.5 hover:bg-secondary/50 cursor-pointer text-sm">
+                                                    <input type="checkbox" className="w-4 h-4 accent-brand-primary"
+                                                        checked={selectedToolIds.includes(t.id)}
+                                                        onChange={() => setSelectedToolIds(s => s.includes(t.id) ? s.filter(x => x !== t.id) : [...s, t.id])}
+                                                        data-testid={`chat-tool-${t.id}`} />
+                                                    <span className="truncate flex-1">{t.name}</span>
+                                                    <span className="text-[10px] font-mono text-muted-foreground">{t.is_builtin ? "built-in" : "custom"}</span>
+                                                </label>
+                                            ))}
+                                            <div className="flex justify-end gap-2 pt-2 border-t border-border mt-2">
+                                                <button type="button" className="text-[11px] text-muted-foreground hover:underline" onClick={() => setSelectedToolIds([])}>Clear</button>
+                                                <button type="button" className="text-[11px] text-brand-primary hover:underline" onClick={() => setToolsOpen(false)}>Done</button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            <Button type="submit" disabled={streaming || !input.trim() || docCount === 0} className="h-11 min-w-[44px]" data-testid="chat-send-button">
+                                <PaperPlaneRight size={16} weight="fill" />
+                            </Button>
+                        </div>
                     </form>
                 </div>
             </div>

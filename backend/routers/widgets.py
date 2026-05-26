@@ -45,7 +45,10 @@ class WidgetConfig(BaseModel):
 
 class CreateWidgetBody(BaseModel):
     name: str = Field(min_length=1, max_length=120)
-    document_ids: List[str] = Field(min_length=1)
+    document_ids: List[str] = Field(default_factory=list)
+    kb_ids: List[str] = Field(default_factory=list)
+    mcp_tool_ids: List[str] = Field(default_factory=list)
+    system_prompt: Optional[str] = None
     config: WidgetConfig = Field(default_factory=WidgetConfig)
     allowed_domains: List[str] = []
     rate_limit_hour: int = Field(default=20, ge=0)
@@ -55,6 +58,9 @@ class CreateWidgetBody(BaseModel):
 class UpdateWidgetBody(BaseModel):
     name: Optional[str] = None
     document_ids: Optional[List[str]] = None
+    kb_ids: Optional[List[str]] = None
+    mcp_tool_ids: Optional[List[str]] = None
+    system_prompt: Optional[str] = None
     config: Optional[WidgetConfig] = None
     allowed_domains: Optional[List[str]] = None
     rate_limit_hour: Optional[int] = None
@@ -74,6 +80,9 @@ def _public_widget(w: dict) -> dict:
         "config": w.get("config", {}),
         "allowed_domains": w.get("allowed_domains", []),
         "document_ids": w.get("document_ids", []),
+        "kb_ids": w.get("kb_ids", []),
+        "mcp_tool_ids": w.get("mcp_tool_ids", []),
+        "system_prompt": w.get("system_prompt"),
         "rate_limit_hour": w.get("rate_limit_hour", 20),
         "rate_limit_day": w.get("rate_limit_day", 500),
         "is_active": w.get("is_active", True),
@@ -105,7 +114,10 @@ async def create_widget(
     user: dict = Depends(require_role(ROLE_EDITOR)),
 ):
     _check_flag()
-    await _verify_doc_access(user, body.document_ids)
+    if body.document_ids:
+        await _verify_doc_access(user, body.document_ids)
+    if not body.document_ids and not body.kb_ids:
+        raise HTTPException(status_code=400, detail="Provide at least one document_id or kb_id")
 
     widget_id = "wgt_" + uuid.uuid4().hex[:8]
     now = datetime.now(timezone.utc).isoformat()
@@ -117,6 +129,9 @@ async def create_widget(
         "config": body.config.dict(),
         "allowed_domains": body.allowed_domains,
         "document_ids": body.document_ids,
+        "kb_ids": body.kb_ids or [],
+        "mcp_tool_ids": body.mcp_tool_ids or [],
+        "system_prompt": body.system_prompt or None,
         "rate_limit_hour": body.rate_limit_hour,
         "rate_limit_day": body.rate_limit_day,
         "is_active": True,
@@ -181,6 +196,12 @@ async def update_widget(
     if body.document_ids is not None:
         await _verify_doc_access(user, body.document_ids)
         updates["document_ids"] = body.document_ids
+    if body.kb_ids is not None:
+        updates["kb_ids"] = body.kb_ids
+    if body.mcp_tool_ids is not None:
+        updates["mcp_tool_ids"] = body.mcp_tool_ids
+    if body.system_prompt is not None:
+        updates["system_prompt"] = body.system_prompt or None
     if body.rate_limit_hour is not None:
         updates["rate_limit_hour"] = body.rate_limit_hour
     if body.rate_limit_day is not None:

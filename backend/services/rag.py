@@ -74,9 +74,10 @@ async def retrieve(query: str, document_ids: List[str], top_k: int = 5) -> List[
     return _dedupe_hits(raw)[:top_k]
 
 
-def build_messages(query: str, hits: List[dict], history: List[dict] | None = None) -> List[dict]:
+def build_messages(query: str, hits: List[dict], history: List[dict] | None = None, system_prompt: str | None = None) -> List[dict]:
     context = _build_context(hits) if hits else "(no relevant context retrieved)"
-    msgs: List[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    sys_text = (system_prompt or SYSTEM_PROMPT).strip() or SYSTEM_PROMPT
+    msgs: List[dict] = [{"role": "system", "content": sys_text}]
     if history:
         msgs.extend(history[-6:])  # last 3 turns
     msgs.append(
@@ -89,30 +90,212 @@ def build_messages(query: str, hits: List[dict], history: List[dict] | None = No
 
 
 async def answer_stream(
-    query: str, document_ids: List[str], history: List[dict] | None = None, top_k: int = 5
+    query: str, document_ids: List[str], history: List[dict] | None = None, top_k: int = 5,
+    system_prompt: str | None = None,
 ) -> tuple[AsyncIterator[str], List[dict], str]:
     if not query or not query.strip():
         raise ValueError("Query must not be empty")
     if len(query) > 2000:
         query = query[:2000]
     hits = await retrieve(query, document_ids, top_k=top_k)
-    messages = build_messages(query, hits, history)
+    messages = build_messages(query, hits, history, system_prompt=system_prompt)
     confidence = _confidence_from_hits(hits)
     return chat_stream(messages), hits, confidence
 
 
 async def answer(
-    query: str, document_ids: List[str], history: List[dict] | None = None, top_k: int = 5
+    query: str, document_ids: List[str], history: List[dict] | None = None, top_k: int = 5,
+    system_prompt: str | None = None,
 ) -> tuple[str, List[dict], str]:
     if not query or not query.strip():
         raise ValueError("Query must not be empty")
     if len(query) > 2000:
         query = query[:2000]
     hits = await retrieve(query, document_ids, top_k=top_k)
-    messages = build_messages(query, hits, history)
+    messages = build_messages(query, hits, history, system_prompt=system_prompt)
     confidence = _confidence_from_hits(hits)
     text = await chat_complete(messages)
     return text, hits, confidence
+
+
+# ── MCP-aware variants ──────────────────────────────────────────────────────
+import json as _json
+import re as _re
+import time as _time
+
+
+_TOOL_CALL_RE = _re.compile(r"TOOL_CALL:\s*([A-Za-z0-9_\-\. ]+?)\s*\((\{.*?\})\)", _re.DOTALL)
+
+
+def _format_tools_section(tools: List[dict]) -> str:
+    if not tools:
+        return ""
+    lines = ["", "You have access to the following tools. Invoke a tool ONLY when you cannot answer from the provided context alone.",
+             "Call a tool by emitting a line of the exact form:",
+             '  TOOL_CALL: <tool_name_or_id>({"key": "value"})',
+             "After tools execute, their results are appended to the conversation as TOOL_RESULT lines and you must produce the final answer.",
+             "", "Available tools:"]
+    for t in tools:
+        schema = _json.dumps(t.get("input_schema") or {}, separators=(",", ":"))
+        lines.append(f"- name='{t.get('name')}' id={t.get('id')} — {t.get('description','')[:200]}  | input_schema={schema}")
+    return "\n".join(lines)
+
+
+async def _resolve_tools(mcp_tool_ids: List[str]) -> List[dict]:
+    from mcp.registry import get_tool
+    out: List[dict] = []
+    for tid in mcp_tool_ids or []:
+        t = await get_tool(tid)
+        if t and t.get("enabled") is not False:
+            out.append(t)
+    return out
+
+
+async def _run_tool_calls(text: str, tools_by_name: dict) -> tuple[List[dict], str]:
+    """Parse TOOL_CALL: lines, execute each, return (tool_calls_made, formatted_results_block).
+
+    `tools_by_name` is indexed by BOTH tool name and tool id so the LLM can
+    use either in its TOOL_CALL invocation.
+    """
+    from mcp.executor import execute_mcp_tool
+    matches = list(_TOOL_CALL_RE.finditer(text or ""))
+    if not matches:
+        return [], ""
+    results: List[dict] = []
+    blocks: List[str] = []
+    for m in matches:
+        name = m.group(1).strip()
+        raw_args = m.group(2).strip()
+        tool = tools_by_name.get(name) or tools_by_name.get(name.lower())
+        t0 = _time.perf_counter()
+        if not tool:
+            blocks.append(f"TOOL_RESULT: {name} → error: unknown tool")
+            results.append({"tool_id": None, "tool_name": name, "input": raw_args,
+                            "result": {"error": "unknown tool"}, "elapsed_ms": 0})
+            continue
+        try:
+            tool_input = _json.loads(raw_args)
+        except Exception as e:
+            blocks.append(f"TOOL_RESULT: {name} → error: invalid JSON args ({e})")
+            results.append({"tool_id": tool["id"], "tool_name": name, "input": raw_args,
+                            "result": {"error": f"invalid JSON args: {e}"}, "elapsed_ms": 0})
+            continue
+        try:
+            res = await execute_mcp_tool(tool["id"], tool_input, run_id="chat", node_id="chat")
+            elapsed = int((_time.perf_counter() - t0) * 1000)
+            preview = _json.dumps(res, default=str)
+            if len(preview) > 1500:
+                preview = preview[:1500] + "…"
+            blocks.append(f"TOOL_RESULT: {tool.get('name')} → {preview}")
+            results.append({"tool_id": tool["id"], "tool_name": tool.get("name"), "input": tool_input,
+                            "result": res, "elapsed_ms": elapsed})
+        except Exception as e:
+            elapsed = int((_time.perf_counter() - t0) * 1000)
+            blocks.append(f"TOOL_RESULT: {tool.get('name')} → error: {e}")
+            results.append({"tool_id": tool["id"], "tool_name": tool.get("name"), "input": tool_input,
+                            "result": {"error": str(e)[:300]}, "elapsed_ms": elapsed})
+    return results, "\n".join(blocks)
+
+
+def _build_tool_aware_messages(query: str, hits: List[dict], history: List[dict] | None,
+                                system_prompt: str | None, tools: List[dict]) -> List[dict]:
+    sys_text = (system_prompt or SYSTEM_PROMPT).strip() or SYSTEM_PROMPT
+    if tools:
+        sys_text = sys_text + "\n" + _format_tools_section(tools)
+    msgs: List[dict] = [{"role": "system", "content": sys_text}]
+    if history:
+        msgs.extend(history[-6:])
+    context = _build_context(hits) if hits else "(no relevant context retrieved)"
+    msgs.append({"role": "user", "content": f"Context:\n{context}\n\nQuestion: {query}"})
+    return msgs
+
+
+async def answer_with_tools(
+    query: str,
+    document_ids: List[str],
+    mcp_tool_ids: List[str] | None = None,
+    history: List[dict] | None = None,
+    system_prompt: str | None = None,
+    top_k: int = 5,
+) -> tuple[str, List[dict], str, List[dict]]:
+    """Non-streaming RAG with optional MCP tool-call loop.
+
+    Falls back to plain `answer()` when mcp_tool_ids is empty/None so existing
+    callers see zero behaviour change.
+    """
+    if not mcp_tool_ids:
+        text, hits, conf = await answer(query, document_ids, history=history, top_k=top_k, system_prompt=system_prompt)
+        return text, hits, conf, []
+
+    if not query or not query.strip():
+        raise ValueError("Query must not be empty")
+    if len(query) > 2000:
+        query = query[:2000]
+
+    tools = await _resolve_tools(mcp_tool_ids)
+    # Index by both name and id so LLMs can use either form.
+    tools_by_name: dict = {}
+    for t in tools:
+        tools_by_name[t["name"]] = t
+        tools_by_name[t["name"].lower()] = t
+        tools_by_name[t["id"]] = t
+
+    hits = await retrieve(query, document_ids, top_k=top_k)
+    confidence = _confidence_from_hits(hits)
+    messages = _build_tool_aware_messages(query, hits, history, system_prompt, tools)
+
+    first_pass = await chat_complete(messages)
+    tool_calls_made, results_block = await _run_tool_calls(first_pass, tools_by_name)
+    if not tool_calls_made:
+        return first_pass, hits, confidence, []
+
+    # Second pass with tool results appended
+    messages.append({"role": "assistant", "content": first_pass})
+    messages.append({"role": "user", "content": "Tool results below — produce the final answer for the user.\n" + results_block})
+    final = await chat_complete(messages)
+    return final, hits, confidence, tool_calls_made
+
+
+async def answer_stream_with_tools(
+    query: str,
+    document_ids: List[str],
+    mcp_tool_ids: List[str] | None = None,
+    history: List[dict] | None = None,
+    system_prompt: str | None = None,
+    top_k: int = 5,
+) -> tuple[AsyncIterator[str], List[dict], str, List[dict]]:
+    """Streaming variant — tool calls run before the streamed answer begins."""
+    if not mcp_tool_ids:
+        stream, hits, conf = await answer_stream(query, document_ids, history=history, top_k=top_k, system_prompt=system_prompt)
+        return stream, hits, conf, []
+
+    if not query or not query.strip():
+        raise ValueError("Query must not be empty")
+    if len(query) > 2000:
+        query = query[:2000]
+
+    tools = await _resolve_tools(mcp_tool_ids)
+    tools_by_name: dict = {}
+    for t in tools:
+        tools_by_name[t["name"]] = t
+        tools_by_name[t["name"].lower()] = t
+        tools_by_name[t["id"]] = t
+
+    hits = await retrieve(query, document_ids, top_k=top_k)
+    confidence = _confidence_from_hits(hits)
+    messages = _build_tool_aware_messages(query, hits, history, system_prompt, tools)
+
+    first_pass = await chat_complete(messages)
+    tool_calls_made, results_block = await _run_tool_calls(first_pass, tools_by_name)
+    if not tool_calls_made:
+        # No tool calls — stream the first pass as the final answer
+        async def _replay():
+            yield first_pass
+        return _replay(), hits, confidence, []
+
+    messages.append({"role": "assistant", "content": first_pass})
+    messages.append({"role": "user", "content": "Tool results below — produce the final answer for the user.\n" + results_block})
+    return chat_stream(messages), hits, confidence, tool_calls_made
 
 
 async def suggest_followups(query: str, answer_text: str, hits: List[dict]) -> List[str]:

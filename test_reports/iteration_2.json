@@ -1,0 +1,42 @@
+{
+  "summary": "Phase A/B regression: 35/35 backend pytest pass (11 new in test_phase_ab.py + 24 legacy in test_enterprise_ai.py). All new Phase-A/B endpoints verified: crawl/preview (200 ok + 422 unreachable), crawl POST returns full job doc (id, kb_id, status, config) with 422 for unreachable URLs and 404 for cancel-when-no-active. Successful https://example.com crawl updates KB document_count>0 AND chunk_count>0. KB search hits now include filename/page/chunk_index/score/kb_id/kb_name attribution fields. Chat ChatRequest accepts mcp_tool_ids and returns tool_calls list (empty for legacy calls). Share links + Widgets persist kb_ids/mcp_tool_ids/system_prompt across POST→GET and PATCH (widgets); share links accept kb_ids without document_ids. Public /api/widget/:id/config endpoint reachable. /v2/mcp/tools/:id/executions returns recent runs (proves tool_id index works). Frontend smoke: login → all 5 routes (/app/workflows /app/kb /app/mcp /app/shares /app/embed-widget) load with 0 console errors. MCP page renders all 5 builtins + 5 Test buttons. KB Crawl page has Preview button. Share/Widget New dialogs expose the Advanced KB+tools+system_prompt section. Chat has a Tools button that opens a popover with 5 MCP-tool checkboxes (Web Search, HTTP Request, GitHub, SQL Query, Webhook).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/widget/:id/config", "issue": "Public config does NOT include kb_ids/mcp_tool_ids/system_prompt in response (only widget_id+config). Request stated this 'may be returned' — current implementation is conservative (security-safe) and OK, but flag if these were intended to be exposed for the widget client."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_phase_ab.py",
+    "/app/backend/tests/test_enterprise_ai.py",
+    "/app/test_reports/pytest/phase_ab_full.xml"
+  ],
+  "action_items": [
+    "Decide whether public /api/widget/:id/config should also surface kb_ids/mcp_tool_ids/system_prompt for client-side rendering, or keep them server-side only (current behaviour)."
+  ],
+  "critical_code_review_comments": [
+    "share.py creates link → returns _public_link(link) but doesn't pass filenames_by_id, so document_filenames is always [] in the create response (only the subsequent GET enriches it). Minor cosmetic UX gap — not a correctness bug.",
+    "widget_public.py /config endpoint projection ({_id:0, widget_id:1, config:1, allowed_domains:1}) intentionally hides kb_ids/mcp_tool_ids/system_prompt — confirm this matches the privacy model documented in PRD.",
+    "knowledge_base.py URL preflight in /crawl uses HEAD+GET with 10s timeout — good defensive code. Consider returning the redirected final URL in the 422 message so users can fix sitemap typos faster.",
+    "chat.py ChatRequest.mcp_tool_ids is accepted on auth path; the test confirmed shape, but the actual TOOL_CALL emission depends on LLM prompt — recommend documenting the exact 'TOOL_CALL: Web Search({...})' contract in PRD so prompt-engineering doesn't break the loop silently."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_phase_ab.py",
+    "/app/backend/tests/test_enterprise_ai.py"
+  ],
+  "success_rate": {
+    "backend": "100% (35/35)",
+    "frontend": "100% smoke (5/5 routes load, 0 console errors, all Advanced sections + Tools popover render)"
+  },
+  "test_credentials": "admin@docchat.app / Admin@12345 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Ephemeral TEST_KB_phaseAB_* (web), TEST_KB_phaseAB_doc_* (doc), TEST_phaseAB_share link, TEST_phaseAB_widget — all auto-deleted by session-scope fixtures. Pre-existing seeded KBs and admin untouched.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Two regression suites: /app/backend/tests/test_enterprise_ai.py (Phase 1+2+3 baseline, 24 tests) and /app/backend/tests/test_phase_ab.py (Phase A+B extension, 11 tests). Both depend on REACT_APP_BACKEND_URL from /app/frontend/.env, outbound https://example.com, and admin@docchat.app credentials. Crawl endpoint contract changed: response field is now `id` (the job id), not `job_id` — the legacy test was updated to accept either. /api/widget/:id/config currently does NOT expose the new addon fields — flag to main agent if intended otherwise. Chat tool_calls field is always present in JSON responses; emptiness depends on whether the LLM emitted a TOOL_CALL marker.",
+  "rca of the issue": "N/A — no bugs found this iteration."
+}

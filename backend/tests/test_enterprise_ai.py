@@ -148,8 +148,10 @@ class TestWebCrawler:
         if r.status_code == 503:
             pytest.skip(f"Qdrant unreachable (graceful 503): {r.text[:200]}")
         assert r.status_code == 200, r.text
-        job_id = r.json().get("job_id")
-        assert job_id
+        body_json = r.json()
+        # New contract: full job doc — accept either `id` or legacy `job_id`
+        job_id = body_json.get("id") or body_json.get("job_id")
+        assert job_id, f"no job id in response: {body_json}"
 
         # Poll status up to 60s
         status = None

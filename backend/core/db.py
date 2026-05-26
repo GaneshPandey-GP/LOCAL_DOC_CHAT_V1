@@ -99,6 +99,8 @@ async def init_indexes():
     await mcp_tools.create_index("id", unique=True)
     await mcp_tools.create_index([("owner_id", 1), ("enabled", 1)])
     await tool_executions.create_index([("run_id", 1), ("node_id", 1)])
+    await tool_executions.create_index("tool_id")
+    await tool_executions.create_index([("tool_id", 1), ("created_at", -1)])
     await agent_memory.create_index([("session_id", 1), ("key", 1)])
     await api_keys.create_index("key_hash", unique=True)
     await api_keys.create_index("owner_id")

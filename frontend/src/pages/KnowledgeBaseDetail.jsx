@@ -201,18 +201,34 @@ export default function KnowledgeBaseDetail() {
                         </div>
                         <div className="space-y-3">
                             {hits.length === 0 && !searching && <div className="text-sm text-muted-foreground">No results yet — run a query.</div>}
-                            {hits.map((h, i) => (
-                                <div key={h.chunk_id} className="border border-border p-3" data-testid={`kb-search-hit-${i}`}>
-                                    <div className="flex items-center justify-between text-xs font-mono mb-1">
-                                        <span className="text-muted-foreground truncate"><FileText size={11} className="inline" /> {h.filename} {h.page ? `· p.${h.page}` : ""} · chunk {h.chunk_index}</span>
-                                        <div className="flex gap-1.5 shrink-0">
-                                            <Badge variant="outline">score {h.score?.toFixed(3)}</Badge>
-                                            {h.confidence && <Badge variant="outline">{h.confidence}</Badge>}
+                            {hits.map((h, i) => {
+                                const score = h.score ?? 0;
+                                const scoreClass = score > 0.7
+                                    ? "bg-green-50 text-green-700 border-green-300"
+                                    : score >= 0.5
+                                    ? "bg-yellow-50 text-yellow-700 border-yellow-300"
+                                    : "bg-red-50 text-red-700 border-red-300";
+                                return (
+                                    <div key={h.chunk_id} className="border border-border p-3" data-testid={`kb-search-hit-${i}`}>
+                                        <div className="flex items-center justify-between text-xs font-mono mb-1 flex-wrap gap-2">
+                                            <span className="text-muted-foreground truncate flex items-center gap-1.5">
+                                                <FileText size={11} className="inline" />
+                                                <span className="font-bold text-foreground">{h.filename || "unknown"}</span>
+                                                <span>· p.{h.page ?? "unknown"}</span>
+                                                <span>· chunk {h.chunk_index ?? "unknown"}</span>
+                                            </span>
+                                            <div className="flex gap-1.5 shrink-0 items-center">
+                                                <Badge variant="outline" className={`font-mono ${scoreClass}`} data-testid={`kb-hit-score-${i}`}>
+                                                    {score.toFixed(3)}
+                                                </Badge>
+                                                {h.confidence && <Badge variant="outline">{h.confidence}</Badge>}
+                                                {h.kb_name && <Badge variant="outline" className="text-[10px]">KB: {h.kb_name}</Badge>}
+                                            </div>
                                         </div>
+                                        <div className="text-sm whitespace-pre-wrap line-clamp-6">{h.text}</div>
                                     </div>
-                                    <div className="text-sm whitespace-pre-wrap line-clamp-6">{h.text}</div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </div>
                 )}

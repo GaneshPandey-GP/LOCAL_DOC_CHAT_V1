@@ -24,12 +24,15 @@ class ChatRequest(BaseModel):
     share_token: Optional[str] = None
     guest_token: Optional[str] = None
     stream: bool = True
+    # Optional MCP tool ids for tool-augmented answers (auth users only;
+    # guests inherit the tool list embedded in their share link).
+    mcp_tool_ids: Optional[List[str]] = None
 
 
 async def _resolve_scope(
     user: Optional[dict], body: ChatRequest
-) -> tuple[List[str], Optional[str], Optional[dict]]:
-    """Returns (document_ids, actor_id, guest_payload)."""
+) -> tuple[List[str], Optional[str], Optional[dict], List[str], Optional[str]]:
+    """Returns (document_ids, actor_id, guest_payload, mcp_tool_ids, system_prompt)."""
     # Guest path: strictly scoped to guest token's document_ids
     if body.guest_token:
         payload = decode_guest_token(body.guest_token)
@@ -46,7 +49,16 @@ async def _resolve_scope(
             if exp < datetime.now(timezone.utc):
                 raise HTTPException(status_code=401, detail="Share link expired")
         scoped_ids = [d for d in payload["document_ids"] if d in link["document_ids"]]
-        return scoped_ids, None, payload
+        # Optional: extend with documents resolved from KBs attached to the link
+        kb_ids = link.get("kb_ids") or []
+        if kb_ids:
+            from services.kb_utils import resolve_kb_document_ids
+            extra = await resolve_kb_document_ids(kb_ids)
+            for d in extra:
+                if d not in scoped_ids:
+                    scoped_ids.append(d)
+        # Guests cannot override tools / system prompt from the client.
+        return scoped_ids, None, payload, list(link.get("mcp_tool_ids") or []), link.get("system_prompt")
 
     # Authenticated user path
     if not user:
@@ -68,14 +80,14 @@ async def _resolve_scope(
     if not requested:
         # Default to all user-accessible documents
         docs = await documents.find(access_clause, {"_id": 0, "id": 1}).to_list(500)
-        return [d["id"] for d in docs], user["id"], None
+        return [d["id"] for d in docs], user["id"], None, list(body.mcp_tool_ids or []), None
 
     # Verify user has access to each requested document
     query: dict = {"id": {"$in": requested}}
     if access_clause:
         query.update(access_clause)
     allowed = await documents.find(query, {"_id": 0, "id": 1}).to_list(500)
-    return [d["id"] for d in allowed], user["id"], None
+    return [d["id"] for d in allowed], user["id"], None, list(body.mcp_tool_ids or []), None
 
 
 async def _get_or_create_session(
@@ -133,7 +145,7 @@ async def chat(
     request: Request,
     user: Optional[dict] = Depends(get_optional_user),
 ):
-    document_ids, actor_id, guest_payload = await _resolve_scope(user, body)
+    document_ids, actor_id, guest_payload, mcp_tool_ids, system_prompt = await _resolve_scope(user, body)
     is_guest = guest_payload is not None
 
     # Sessions: guest sessions are local to share token
@@ -205,8 +217,11 @@ async def chat(
             import time
 
             start = time.time()
-            stream_iter, hits, confidence = await rag.answer_stream(
-                body.query, document_ids, history=history
+            stream_iter, hits, confidence, tool_calls_made = await rag.answer_stream_with_tools(
+                body.query, document_ids,
+                mcp_tool_ids=mcp_tool_ids,
+                history=history,
+                system_prompt=system_prompt,
             )
             # Send metadata event first
             citations = [
@@ -222,6 +237,21 @@ async def chat(
             ]
             yield f"event: meta\ndata: {json.dumps({'session_id': session_id, 'citations': citations, 'confidence': confidence})}\n\n"
 
+            if tool_calls_made:
+                # Truncate large tool results before serialising
+                safe_calls = []
+                for tc in tool_calls_made:
+                    r = tc.get("result")
+                    rs = json.dumps(r, default=str) if not isinstance(r, str) else r
+                    safe_calls.append({
+                        "tool_id": tc.get("tool_id"),
+                        "tool_name": tc.get("tool_name"),
+                        "input": tc.get("input"),
+                        "result_preview": (rs[:800] + "…") if len(rs) > 800 else rs,
+                        "elapsed_ms": tc.get("elapsed_ms"),
+                    })
+                yield f"event: tool_calls\ndata: {json.dumps({'tool_calls': safe_calls})}\n\n"
+
             full_text = []
             async for token in stream_iter:
                 full_text.append(token)
@@ -234,6 +264,7 @@ async def chat(
                 answer_text,
                 citations=citations,
                 confidence=confidence,
+                tool_calls=tool_calls_made,
                 latency_ms=int((time.time() - start) * 1000),
             )
             try:
@@ -248,7 +279,12 @@ async def chat(
     import time
 
     start = time.time()
-    text, hits, confidence = await rag.answer(body.query, document_ids, history=history)
+    text, hits, confidence, tool_calls_made = await rag.answer_with_tools(
+        body.query, document_ids,
+        mcp_tool_ids=mcp_tool_ids,
+        history=history,
+        system_prompt=system_prompt,
+    )
     citations = [
         {
             "index": i + 1,
@@ -266,6 +302,7 @@ async def chat(
         text,
         citations=citations,
         confidence=confidence,
+        tool_calls=tool_calls_made,
         latency_ms=int((time.time() - start) * 1000),
     )
     try:
@@ -278,5 +315,6 @@ async def chat(
         "answer": text,
         "citations": citations,
         "confidence": confidence,
+        "tool_calls": tool_calls_made,
         "followups": followups,
     }

@@ -160,7 +160,12 @@ export default function KnowledgeBases() {
                                         {kb.enable_reranking && <Badge variant="outline" className="text-[10px] font-mono uppercase">rerank</Badge>}
                                     </div>
                                     <div className="grid grid-cols-3 gap-2 text-[11px] font-mono text-muted-foreground">
-                                        <div><div className="text-foreground font-semibold">{kb.chunk_count || 0}</div>chunks</div>
+                                        <div className="flex items-center gap-1">
+                                            <div className="text-foreground font-semibold">{kb.chunk_count || 0}</div>chunks
+                                            {kb.last_crawled_at && (kb.chunk_count || 0) === 0 && (kb.document_count || 0) === 0 && (
+                                                <span title="KB has been crawled but contains no chunks. Verify the URL/selector." className="text-amber-500">⚠</span>
+                                            )}
+                                        </div>
                                         <div><div className="text-foreground font-semibold">{kb.document_count || 0}</div>docs</div>
                                         <div className="truncate"><div className="text-foreground font-semibold">{kb.top_k || 5}</div>top-k</div>
                                     </div>

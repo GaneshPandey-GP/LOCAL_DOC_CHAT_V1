@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import ShareScopeAddons from "@/components/ShareScopeAddons";
 import {
     Plus,
     ArrowLeft,
@@ -395,6 +396,9 @@ function WidgetBuilder({ initial, onSaved, onBack }) {
     const [cfg, setCfg] = useState(initial?.config || { ...DEFAULT_CFG });
     const [allowedDomains, setAllowedDomains] = useState((initial?.allowed_domains || []).join("\n"));
     const [docIds, setDocIds] = useState(initial?.document_ids || []);
+    const [kbIds, setKbIds] = useState(initial?.kb_ids || []);
+    const [toolIds, setToolIds] = useState(initial?.mcp_tool_ids || []);
+    const [systemPrompt, setSystemPrompt] = useState(initial?.system_prompt || "");
     const [rateHour, setRateHour] = useState(initial?.rate_limit_hour ?? 20);
     const [rateDay, setRateDay] = useState(initial?.rate_limit_day ?? 500);
     const [docs, setDocs] = useState([]);
@@ -411,7 +415,7 @@ function WidgetBuilder({ initial, onSaved, onBack }) {
 
     const save = async () => {
         if (!name.trim()) { toast.error("Widget name is required"); return; }
-        if (!docIds.length) { toast.error("Select at least one document"); return; }
+        if (!docIds.length && !kbIds.length) { toast.error("Select at least one document or KB"); return; }
         setBusy(true);
         try {
             const domains = allowedDomains.split("\n").map((d) => d.trim()).filter(Boolean);
@@ -423,6 +427,9 @@ function WidgetBuilder({ initial, onSaved, onBack }) {
                 rate_limit_hour: parseInt(rateHour, 10) || 0,
                 rate_limit_day: parseInt(rateDay, 10) || 0,
             };
+            if (kbIds.length || (initial && initial.kb_ids)) payload.kb_ids = kbIds;
+            if (toolIds.length || (initial && initial.mcp_tool_ids)) payload.mcp_tool_ids = toolIds;
+            if (systemPrompt.trim() || (initial && initial.system_prompt)) payload.system_prompt = systemPrompt.trim() || null;
             if (isEdit) {
                 await api.patch(`/v2/widgets/${initial.widget_id}`, payload);
                 toast.success("Widget updated");
@@ -494,6 +501,12 @@ function WidgetBuilder({ initial, onSaved, onBack }) {
                             </div>
                             <div className="text-[11px] text-muted-foreground mt-1 font-mono">{docIds.length} selected</div>
                         </div>
+
+                        <ShareScopeAddons
+                            kbIds={kbIds} setKbIds={setKbIds}
+                            toolIds={toolIds} setToolIds={setToolIds}
+                            systemPrompt={systemPrompt} setSystemPrompt={setSystemPrompt}
+                        />
 
                         {/* Tabs */}
                         <Tabs value={tab} onValueChange={setTab}>

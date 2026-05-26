@@ -88,11 +88,14 @@ class WebCrawler:
 
     async def _fetch(self, client: httpx.AsyncClient, url: str, selector: Optional[str], exclude_selectors: list[str]) -> Optional[tuple[str, str, int]]:
         try:
-            resp = await client.get(url, timeout=20.0, follow_redirects=True)
+            resp = await client.get(url, timeout=30.0, follow_redirects=True)
         except Exception as e:
             logger.debug("fetch fail %s: %s", url, e)
             return None
-        if resp.status_code != 200 or not _is_html(resp):
+        if resp.status_code != 200:
+            return None
+        if not _is_html(resp):
+            logger.debug("skip non-HTML %s (content-type=%s)", url, resp.headers.get("content-type"))
             return None
         text = _clean_markdown(resp.text, selector, exclude_selectors)
         if len(text) < 50:
@@ -132,11 +135,16 @@ class WebCrawler:
                 robots = urllib.robotparser.RobotFileParser()
                 robots.set_url(f"{p.scheme}://{p.netloc}/robots.txt")
                 robots.read()
-            except Exception:
+            except Exception as e:
+                logger.warning("robots.txt fetch failed for %s: %s — proceeding without robots restrictions", root_url, e)
                 robots = None
 
         delay = 1.0 / max(0.1, rate_limit_rps)
-        async with httpx.AsyncClient(headers={"User-Agent": self.user_agent}) as client:
+        async with httpx.AsyncClient(
+            headers={"User-Agent": self.user_agent},
+            follow_redirects=True,
+            timeout=30.0,
+        ) as client:
             while queue and len(out) < max_pages:
                 url, depth, parent = queue.pop(0)
                 url, _ = urldefrag(url)
@@ -162,7 +170,7 @@ class WebCrawler:
                 # Discover links if we still have depth budget
                 if depth < max_depth:
                     try:
-                        resp = await client.get(url, timeout=20.0)
+                        resp = await client.get(url, timeout=30.0)
                         soup = BeautifulSoup(resp.text, "lxml") if _have_lxml() else BeautifulSoup(resp.text, "html.parser")
                         for a in soup.find_all("a", href=True):
                             href = urljoin(url, a["href"])
@@ -176,6 +184,10 @@ class WebCrawler:
                 elapsed = time.monotonic() - t0
                 if elapsed < delay:
                     await asyncio.sleep(delay - elapsed)
+        logger.info(
+            "crawl finished root=%s pages_found=%d seen=%d max_pages=%d",
+            root_url, len(out), len(seen), max_pages,
+        )
         return out
 
     async def fetch_sitemap_urls(self, sitemap_url: str) -> list[str]:

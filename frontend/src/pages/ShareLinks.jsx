@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import ShareScopeAddons from "@/components/ShareScopeAddons";
 import {
     Plus,
     Copy,
@@ -30,21 +31,25 @@ function CreateDialog({ open, onOpenChange, onCreated }) {
     const [singleUse, setSingleUse] = useState(false);
     const [domain, setDomain] = useState("");
     const [busy, setBusy] = useState(false);
+    const [kbIds, setKbIds] = useState([]);
+    const [toolIds, setToolIds] = useState([]);
+    const [systemPrompt, setSystemPrompt] = useState("");
 
     useEffect(() => {
         if (!open) return;
         api.get("/v2/documents").then((r) => setDocs(r.data.filter((d) => d.status === "ready")));
         setSelected([]); setMode("public"); setTitle(""); setPassword(""); setExpiresIn("24"); setSingleUse(false); setDomain("");
+        setKbIds([]); setToolIds([]); setSystemPrompt("");
     }, [open]);
 
     const toggle = (id) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
 
     const submit = async () => {
-        if (!selected.length) { toast.error("Select at least one document"); return; }
+        if (!selected.length && !kbIds.length) { toast.error("Select at least one document or knowledge base"); return; }
         if (mode === "password" && !password) { toast.error("Password required"); return; }
         setBusy(true);
         try {
-            await api.post("/v2/share-links", {
+            const payload = {
                 document_ids: selected,
                 mode,
                 password: mode === "password" ? password : undefined,
@@ -52,7 +57,11 @@ function CreateDialog({ open, onOpenChange, onCreated }) {
                 single_use: singleUse,
                 domain_restriction: domain || undefined,
                 title: title || undefined,
-            });
+            };
+            if (kbIds.length) payload.kb_ids = kbIds;
+            if (toolIds.length) payload.mcp_tool_ids = toolIds;
+            if (systemPrompt.trim()) payload.system_prompt = systemPrompt.trim();
+            await api.post("/v2/share-links", payload);
             toast.success("Share link created");
             onOpenChange(false);
             onCreated?.();
@@ -148,6 +157,12 @@ function CreateDialog({ open, onOpenChange, onCreated }) {
                         </div>
                         <Switch checked={singleUse} onCheckedChange={setSingleUse} data-testid="share-single-use-switch" />
                     </div>
+
+                    <ShareScopeAddons
+                        kbIds={kbIds} setKbIds={setKbIds}
+                        toolIds={toolIds} setToolIds={setToolIds}
+                        systemPrompt={systemPrompt} setSystemPrompt={setSystemPrompt}
+                    />
                 </div>
 
                 <DialogFooter>

@@ -101,13 +101,24 @@ async def run_crawl_job(job_id: str) -> None:
         )
         return
 
+    cfg = job.get("config", {})
+    logger.info(
+        "crawl job %s starting kb=%s type=%s url=%s depth=%s max_pages=%s",
+        job_id, kb.get("id"), cfg.get("type"), cfg.get("url") or kb.get("web_root_url"),
+        cfg.get("depth"), cfg.get("max_pages"),
+    )
+
     started = datetime.now(timezone.utc).isoformat()
     await crawl_jobs.update_one(
         {"id": job_id},
-        {"$set": {"status": "running", "started_at": started, "pages_found": 0, "pages_crawled": 0, "pages_failed": 0, "pages_skipped": 0}},
+        {"$set": {
+            "status": "running", "started_at": started,
+            "pages_found": 0, "pages_crawled": 0, "pages_failed": 0, "pages_skipped": 0,
+            "failed_urls": [],
+        }},
     )
 
-    cfg = job.get("config", {})
+    cancelled = False
     try:
         crawler = await _pick_crawler(bool(cfg.get("use_playwright")))
         ctype = cfg.get("type", "recursive")
@@ -141,29 +152,71 @@ async def run_crawl_job(job_id: str) -> None:
         skipped = 0
         failed = 0
         for p in pages:
+            # Cancellation check before each page
+            current = await crawl_jobs.find_one({"id": job_id}, {"_id": 0, "status": 1})
+            if current and current.get("status") == "cancelled":
+                cancelled = True
+                logger.info("crawl job %s cancelled by user — stopping at page %d/%d", job_id, crawled + skipped + failed, len(pages))
+                break
             try:
                 added, was_skipped = await _ingest_page(kb, p)
                 if was_skipped:
                     skipped += 1
+                    await crawl_jobs.update_one(
+                        {"id": job_id},
+                        {"$inc": {"pages_skipped": 1}},
+                    )
                 else:
                     crawled += 1
                     total_chunks += added
+                    await crawl_jobs.update_one(
+                        {"id": job_id},
+                        {"$inc": {"pages_crawled": 1}, "$set": {"chunks_added": total_chunks}},
+                    )
             except Exception as e:
                 logger.warning("ingest fail for %s: %s", p.url, e)
                 failed += 1
-            await crawl_jobs.update_one(
-                {"id": job_id},
-                {"$set": {"pages_crawled": crawled, "pages_skipped": skipped, "pages_failed": failed}},
-            )
+                await crawl_jobs.update_one(
+                    {"id": job_id},
+                    {"$inc": {"pages_failed": 1}, "$push": {"failed_urls": {"url": p.url, "reason": str(e)[:300]}}},
+                )
 
         ended = datetime.now(timezone.utc).isoformat()
-        await crawl_jobs.update_one(
-            {"id": job_id},
-            {"$set": {"status": "completed", "ended_at": ended, "chunks_added": total_chunks}},
-        )
-        await knowledge_bases.update_one(
-            {"id": kb["id"]},
-            {"$set": {"last_crawled_at": ended}, "$inc": {"chunk_count": total_chunks}},
+
+        if cancelled:
+            final_status = "cancelled"
+            error_msg = None
+        elif len(pages) == 0:
+            final_status = "failed"
+            error_msg = "Crawler returned no pages — check the URL, robots.txt settings, or network connectivity from the container"
+        else:
+            final_status = "completed"
+            error_msg = None
+
+        final_set = {"status": final_status, "ended_at": ended, "chunks_added": total_chunks}
+        if error_msg:
+            final_set["error"] = error_msg
+        await crawl_jobs.update_one({"id": job_id}, {"$set": final_set})
+
+        # Bump KB rollup stats so cards reflect the just-finished crawl.
+        if final_status in ("completed", "cancelled") and total_chunks > 0:
+            kb_doc_count = await documents.count_documents({"kb_id": kb["id"]})
+            kb_chunk_total = sum(
+                [d.get("chunk_count", 0) async for d in documents.find(
+                    {"kb_id": kb["id"]}, {"_id": 0, "chunk_count": 1}
+                )]
+            )
+            await knowledge_bases.update_one(
+                {"id": kb["id"]},
+                {"$set": {
+                    "last_crawled_at": ended,
+                    "chunk_count": kb_chunk_total,
+                    "document_count": kb_doc_count,
+                }},
+            )
+        logger.info(
+            "crawl job %s finished status=%s pages_found=%d crawled=%d skipped=%d failed=%d chunks=%d",
+            job_id, final_status, len(pages), crawled, skipped, failed, total_chunks,
         )
     except Exception as e:
         logger.exception("crawl job failed: %s", e)
@@ -171,3 +224,4 @@ async def run_crawl_job(job_id: str) -> None:
             {"id": job_id},
             {"$set": {"status": "failed", "error": str(e)[:500], "ended_at": datetime.now(timezone.utc).isoformat()}},
         )
+        raise

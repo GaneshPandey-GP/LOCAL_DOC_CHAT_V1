@@ -20,6 +20,7 @@ import {
     BookOpen,
     Wrench,
     ChartBar,
+    GitBranch,
 } from "@phosphor-icons/react";
 
 function NavItem({ to, end, icon: Icon, label, testId, onNavigate }) {
@@ -86,6 +87,7 @@ export default function AppLayout() {
 
                 <div className="dc-overline px-5 mb-2 mt-6">AI Studio</div>
                 <NavItem to="/app/mcp" icon={Wrench} label="MCP Tools" testId="nav-mcp" onNavigate={closeMobile} />
+                <NavItem to="/app/workflows" icon={GitBranch} label="Workflows" testId="nav-workflows" onNavigate={closeMobile} />
 
                 {isAdmin && (
                     <>

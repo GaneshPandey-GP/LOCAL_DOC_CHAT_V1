@@ -22,19 +22,26 @@ router = APIRouter(prefix="/v2/share-links", tags=["share-links"])
 
 
 class CreateShareLinkBody(BaseModel):
-    document_ids: List[str] = Field(min_length=1)
+    document_ids: List[str] = Field(default_factory=list)
     mode: Literal["public", "password", "expiring"] = "public"
     password: Optional[str] = None
     expires_in_hours: Optional[int] = None
     single_use: bool = False
     domain_restriction: Optional[str] = None  # e.g. "@company.com"
     title: Optional[str] = None
+    # Optional additive fields
+    mcp_tool_ids: Optional[List[str]] = None
+    kb_ids: Optional[List[str]] = None
+    system_prompt: Optional[str] = None
 
 
 class ShareLinkOut(BaseModel):
     token: str
     mode: str
     document_ids: List[str]
+    kb_ids: List[str] = []
+    mcp_tool_ids: List[str] = []
+    system_prompt: Optional[str] = None
     document_filenames: List[str] = []
     title: Optional[str]
     single_use: bool
@@ -63,17 +70,22 @@ async def create_share_link(
     # Verify user has access to every requested document.
     # Owners can share any doc; editors can share docs they uploaded
     # OR docs explicitly assigned to them by an Owner.
-    doc_query: dict = {"id": {"$in": body.document_ids}}
-    if user["role"] != "owner":
-        doc_query["$or"] = [
-            {"owner_id": user["id"]},
-            {"assigned_to": user["id"]},
-        ]
-    found = await documents.find(doc_query, {"_id": 0, "id": 1}).to_list(500)
-    found_ids = {d["id"] for d in found}
-    missing = set(body.document_ids) - found_ids
-    if missing:
-        raise HTTPException(status_code=403, detail=f"No access to documents: {list(missing)}")
+    if body.document_ids:
+        doc_query: dict = {"id": {"$in": body.document_ids}}
+        if user["role"] != "owner":
+            doc_query["$or"] = [
+                {"owner_id": user["id"]},
+                {"assigned_to": user["id"]},
+            ]
+        found = await documents.find(doc_query, {"_id": 0, "id": 1}).to_list(500)
+        found_ids = {d["id"] for d in found}
+        missing = set(body.document_ids) - found_ids
+        if missing:
+            raise HTTPException(status_code=403, detail=f"No access to documents: {list(missing)}")
+
+    # Must scope to at least one document OR at least one knowledge base.
+    if not body.document_ids and not body.kb_ids:
+        raise HTTPException(status_code=400, detail="Provide at least one document_id or kb_id")
 
     token = generate_share_token()
     expires_at = None
@@ -90,7 +102,10 @@ async def create_share_link(
     link = {
         "token": token,
         "mode": body.mode,
-        "document_ids": body.document_ids,
+        "document_ids": body.document_ids or [],
+        "kb_ids": body.kb_ids or [],
+        "mcp_tool_ids": body.mcp_tool_ids or [],
+        "system_prompt": (body.system_prompt or None),
         "owner_id": user["id"],
         # Creator metadata — owner-visibility & filtering
         "creator_id": user["id"],
@@ -130,6 +145,9 @@ def _public_link(link: dict, filenames_by_id: Optional[dict] = None) -> dict:
         "token": link["token"],
         "mode": link["mode"],
         "document_ids": doc_ids,
+        "kb_ids": link.get("kb_ids", []) or [],
+        "mcp_tool_ids": link.get("mcp_tool_ids", []) or [],
+        "system_prompt": link.get("system_prompt"),
         "document_filenames": filenames,
         "title": link.get("title"),
         "single_use": link.get("single_use", False),

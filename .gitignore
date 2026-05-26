@@ -92,3 +92,13 @@ frontend/node_modules/.cache/default-development/3.pack
 frontend/node_modules/.cache/default-development/9.pack
 frontend/node_modules/.cache/default-development/5.pack
 frontend/node_modules/.cache/default-development/2.pack
+
+# Production deployment artifacts (added 2026-05-26)
+nginx/ssl/*.pem
+nginx/ssl/*.crt
+nginx/ssl/*.key
+.env
+backend/uploads/
+backend/chroma_db/
+backend/qdrant_data/
+frontend/node_modules/.cache/default-development/6.pack

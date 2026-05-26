@@ -201,22 +201,94 @@ async def start_crawl(
     if running:
         raise HTTPException(409, "A crawl job is already running for this KB")
 
+    # URL reachability preflight (HEAD with short timeout). Fail-fast with 422.
+    probe_url = body.url or kb.get("web_root_url") or kb.get("sitemap_url")
+    if probe_url:
+        import httpx as _httpx
+        try:
+            async with _httpx.AsyncClient(follow_redirects=True, timeout=10.0) as _c:
+                _r = await _c.head(probe_url)
+                if _r.status_code >= 400:
+                    # Some servers don't support HEAD — retry with GET
+                    _r = await _c.get(probe_url)
+                if _r.status_code >= 400:
+                    raise HTTPException(422, f"URL unreachable: {probe_url} responded {_r.status_code}")
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(422, f"URL unreachable: {probe_url} ({type(e).__name__}: {str(e)[:160]})")
+
     job_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
-    await crawl_jobs.insert_one({
+    job_doc = {
         "id": job_id, "kb_id": kb_id, "owner_id": kb["owner_id"],
         "status": "queued", "config": body.model_dump(),
         "pages_found": 0, "pages_crawled": 0, "pages_failed": 0, "pages_skipped": 0,
+        "failed_urls": [],
         "queued_at": now,
-    })
-    # Defer the heavy import to keep router startup cheap
+    }
+    await crawl_jobs.insert_one(job_doc)
+    # Defer the heavy import to keep router startup cheap. BackgroundTasks
+    # expects a callable + args — NOT a pre-awaited coroutine.
     from services.web_crawler.pipeline import run_crawl_job
     background_tasks.add_task(run_crawl_job, job_id)
     await log_event("kb.crawl.started", actor_id=user["id"], actor_role=user["role"],
                     resource_type="kb", resource_id=kb_id,
                     ip=request.client.host if request.client else None,
                     metadata={"job_id": job_id, "type": body.type})
-    return {"job_id": job_id, "status": "queued"}
+    job_doc.pop("_id", None)
+    return job_doc
+
+
+@router.post("/{kb_id}/crawl/cancel")
+async def cancel_crawl(
+    kb_id: str,
+    user: dict = Depends(require_role(ROLE_EDITOR)),
+):
+    """Signal the active job to stop after the page currently in flight."""
+    await _get_owned_kb(kb_id, user, require_owner=True)
+    job = await crawl_jobs.find_one(
+        {"kb_id": kb_id, "status": {"$in": ["queued", "running"]}}, {"_id": 0}, sort=[("queued_at", -1)],
+    )
+    if not job:
+        raise HTTPException(404, "No active crawl to cancel")
+    await crawl_jobs.update_one(
+        {"id": job["id"]},
+        {"$set": {"status": "cancelled", "ended_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    return {"ok": True, "job_id": job["id"]}
+
+
+@router.post("/{kb_id}/crawl/preview")
+async def preview_crawl(
+    kb_id: str,
+    body: CrawlConfig,
+    user: dict = Depends(require_role(ROLE_EDITOR)),
+):
+    """Fetch a single URL and return the extracted markdown preview without ingesting.
+
+    Useful for end-users dialling in `selector` / `exclude_selectors` before
+    committing to a full crawl.
+    """
+    kb = await _get_owned_kb(kb_id, user)
+    url = body.url or kb.get("web_root_url")
+    if not url:
+        raise HTTPException(422, "No URL provided and KB has no web_root_url")
+    from services.web_crawler.crawler import WebCrawler
+    crawler = WebCrawler(user_agent="DocChat-Crawler/1.0")
+    try:
+        page = await crawler.fetch_single(url, body.selector or kb.get("selector"), kb.get("exclude_selectors") or [])
+    except Exception as e:
+        raise HTTPException(422, f"Preview failed: {str(e)[:200]}")
+    if not page:
+        raise HTTPException(422, f"URL did not return usable HTML content: {url}")
+    return {
+        "url": page.url,
+        "title": page.title,
+        "content_preview": page.content[:500],
+        "word_count": len(page.content.split()),
+        "status_code": page.status_code,
+    }
 
 
 @router.get("/{kb_id}/crawl/status")
@@ -298,7 +370,7 @@ async def search_kb(kb_id: str, body: SearchQuery, user: dict = Depends(get_curr
     kb = await _get_owned_kb(kb_id, user)
     strategy = get_strategy(body.mode or kb.get("search_mode", "hybrid"))
     config = {**kb, **({"similarity_threshold": body.similarity_threshold} if body.similarity_threshold is not None else {})}
-    return await strategy(
+    raw_hits = await strategy(
         body.query,
         kb["owner_id"],
         doc_ids=None,
@@ -306,3 +378,17 @@ async def search_kb(kb_id: str, body: SearchQuery, user: dict = Depends(get_curr
         top_k=body.top_k or kb.get("top_k", 5),
         config=config,
     )
+    # Enrich each hit with stable source attribution fields for the UI.
+    kb_name = kb.get("name") or "unknown"
+    enriched = []
+    for h in raw_hits or []:
+        enriched.append({
+            **h,
+            "filename": h.get("filename") or "unknown",
+            "page": h.get("page") if h.get("page") is not None else "unknown",
+            "chunk_index": h.get("chunk_index") if h.get("chunk_index") is not None else "unknown",
+            "score": float(h.get("score") or 0.0),
+            "kb_id": kb_id,
+            "kb_name": kb_name,
+        })
+    return enriched

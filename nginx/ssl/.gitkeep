@@ -1,0 +1,9 @@
+# Place your SSL certificate files here:
+#   fullchain.pem  — the full certificate chain
+#   privkey.pem    — the private key
+# These files are git-ignored. Either:
+#   1. Use Let's Encrypt (recommended):
+#         sudo certbot certonly --standalone -d yourdomain.com
+#         sudo cp /etc/letsencrypt/live/yourdomain.com/fullchain.pem ./nginx/ssl/
+#         sudo cp /etc/letsencrypt/live/yourdomain.com/privkey.pem  ./nginx/ssl/
+#   2. Or supply your own existing certs.

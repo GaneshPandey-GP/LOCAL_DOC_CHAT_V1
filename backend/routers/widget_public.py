@@ -779,8 +779,15 @@ async def widget_chat(widget_id: str, body: WidgetChatBody, request: Request):
         {"$inc": {"query_count": 1}, "$set": {"last_active_at": datetime.now(timezone.utc).isoformat()}},
     )
 
-    # Resolve active document_ids
-    raw_ids = w.get("document_ids", [])
+    # Resolve active document_ids — direct docs + docs from attached KBs
+    raw_ids = list(w.get("document_ids", []) or [])
+    kb_ids = w.get("kb_ids") or []
+    if kb_ids:
+        from services.kb_utils import resolve_kb_document_ids
+        kb_doc_ids = await resolve_kb_document_ids(kb_ids)
+        for d in kb_doc_ids:
+            if d not in raw_ids:
+                raw_ids.append(d)
     active_docs = await documents.find(
         {"id": {"$in": raw_ids}, "status": "ready"}, {"_id": 0, "id": 1}
     ).to_list(500)
@@ -800,11 +807,18 @@ async def widget_chat(widget_id: str, body: WidgetChatBody, request: Request):
             "Cache-Control": "no-cache",
         })
 
+    mcp_tool_ids = w.get("mcp_tool_ids") or []
+    system_prompt = w.get("system_prompt")
+
     async def event_gen():
         import time
         start = time.time()
         try:
-            stream_iter, hits, confidence = await rag.answer_stream(body.query, active_ids)
+            stream_iter, hits, confidence, tool_calls_made = await rag.answer_stream_with_tools(
+                body.query, active_ids,
+                mcp_tool_ids=mcp_tool_ids,
+                system_prompt=system_prompt,
+            )
         except Exception:
             yield f"event: meta\ndata: {json.dumps({'session_id': session_id, 'citations': [], 'confidence': 'LOW'})}\n\n"
             yield f"event: token\ndata: {json.dumps({'t': fallback_msg})}\n\n"
@@ -825,6 +839,10 @@ async def widget_chat(widget_id: str, body: WidgetChatBody, request: Request):
             ]
 
         yield f"event: meta\ndata: {json.dumps({'session_id': session_id, 'citations': citations, 'confidence': confidence if show_confidence else None})}\n\n"
+
+        if tool_calls_made:
+            safe = [{"tool_name": tc.get("tool_name"), "elapsed_ms": tc.get("elapsed_ms")} for tc in tool_calls_made]
+            yield f"event: tool_calls\ndata: {json.dumps({'tool_calls': safe})}\n\n"
 
         full_text = []
         async for token in stream_iter:
