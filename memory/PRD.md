@@ -50,6 +50,45 @@
 - `POST GET DELETE /api/v2/api-keys`
 - `GET /api/v2/model-analytics/{summary,by-model,latency,cost}`
 
+## 2026-05-26 — Phase A + B + C + D delivered (this session)
+
+**Phase A — Backend correctness (additive only)**
+- Crawler robustness: pipeline.py wraps run_crawl_job in broad try/except, per-page `$inc` updates, cancellation polled every iteration, `failed_urls[]` per job, KB rollup of chunk_count + document_count at end. crawler.py: follow_redirects=True, configurable User-Agent, content-type skip, 30s timeout, robots.txt soft-fail logged.
+- New endpoints: `POST /v2/kb/:id/crawl/cancel`, `POST /v2/kb/:id/crawl/preview`. `/v2/kb/:id/crawl` now URL-preflights with HEAD/GET (422 on unreachable) and Qdrant-preflights (503 if down). Response is the full job document.
+- `/v2/kb/:id/search` enriches every hit with filename / page / chunk_index / score / kb_id / kb_name.
+- RAG: `answer_with_tools` + `answer_stream_with_tools` implement a 2-pass TOOL_CALL loop; `system_prompt` parameter wired everywhere. `_TOOL_CALL_RE` allows spaces in tool name; tools resolved by both name & id.
+- `chat.py` ChatRequest accepts `mcp_tool_ids`; SSE adds `event: tool_calls`; non-streaming response returns `tool_calls[]`.
+- `share.py` + `widgets.py` + `widget_public.py` persist & honour `kb_ids`, `mcp_tool_ids`, `system_prompt`. Guests/widget visitors cannot override these from the client — server resolves them from the persisted record.
+- `services/kb_utils.py` added — pure additive `resolve_kb_document_ids` helper.
+- `core/db.py` adds `tool_executions.tool_id` index.
+
+**Phase B — Frontend wiring**
+- `KnowledgeBaseCrawl.jsx`: preview button + modal, cancel button, status colour map covers failed/cancelled, failed_urls expandable row, 422 toast on Start Crawl, zero-pages warning banner.
+- `KnowledgeBases.jsx`: warning emoji on cards with chunk_count=0 after crawl.
+- `KnowledgeBaseDetail.jsx`: bold filename, colored score badge (green>0.7 / yellow / red), confidence pill, KB name badge.
+- `MCPTools.jsx`: "Built-ins missing" warning, structured input fields driven by `input_schema.properties` (with enum/boolean/object/integer handling), inline last-5-executions per tool.
+- `ShareLinks.jsx` + `EmbedWidget.jsx`: reuse new `ShareScopeAddons` component to add KB multi-select + MCP tools multi-select + system prompt textarea (with character counter + reset button). The server-side API-key warning fires for builtin-github and builtin-sql-query.
+- `Chat.jsx`: Tools popover button in input toolbar (only when ≥1 tool available); sends `mcp_tool_ids` on the request; collapsible "tools used" section above each answer.
+
+**Phase C — Workflows nav stub**
+- `pages/Workflows.jsx` coming-soon page added.
+- `App.js` registers `/app/workflows`, `/app/workflows/:wfId/builder`, `/app/workflows/:wfId/runs`, `/app/workflows/runs/:runId` — all pointing at the stub.
+- `AppLayout.jsx` adds Workflows NavItem under AI Studio with GitBranch icon.
+
+**Phase D — Docs + Docker**
+- `/app/PRD.md` + `/app/TRD.md` written from scratch with full feature inventory, RBAC matrix, Mermaid diagrams, complete API/schema/env/flag tables, deployment checklist.
+- `/app/Dockerfile` (python:3.11-slim + tesseract + poppler + playwright chromium + healthcheck).
+- `/app/Dockerfile.frontend` (node:20-alpine → nginx:1.25-alpine multi-stage with `yarn install --frozen-lockfile`).
+- `/app/nginx/nginx.conf` (HTTP→HTTPS redirect, TLS 1.2/1.3, HSTS, `/api/v2/chat` + `/api/widget/*/chat` SSE-friendly proxying with `proxy_buffering off` + 300s timeouts, SPA fallback `try_files`).
+- `/app/docker-compose.yml` (mongo + qdrant + backend + frontend with healthchecks + named volumes + bridge network).
+- `/app/.env.example` + `/app/nginx/ssl/.gitkeep` + `.gitignore` additions.
+- `/app/setup.sh` — idempotent one-click installer with `--update`, `--logs`, OS/Docker/env/SSL preflight, 120s health wait, success banner.
+
+**Testing this session**
+- Backend regression: 35/35 pytest pass (24 baseline `test_enterprise_ai.py` + 11 new `test_phase_ab.py`).
+- Frontend smoke: 5/5 routes load with 0 console errors. All new UI elements render correctly.
+- No critical or minor bugs flagged.
+
 ## Verified end-to-end
 - Backend boots clean (5 builtin MCP tools seeded, Qdrant migration hook ran no-op)
 - Login still works; existing routes untouched
