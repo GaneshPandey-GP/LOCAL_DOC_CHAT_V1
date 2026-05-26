@@ -102,3 +102,4 @@ backend/uploads/
 backend/chroma_db/
 backend/qdrant_data/
 frontend/node_modules/.cache/default-development/6.pack
+frontend/node_modules/.cache/default-development/10.pack
