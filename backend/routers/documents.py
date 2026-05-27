@@ -303,7 +303,7 @@ async def list_documents(
 
 
 def _user_can_access_doc(user: dict, doc: dict) -> bool:
-    if user["role"] == "owner":
+    if user["role"]in ("owner", "admin"):
         return True
     if doc.get("owner_id") == user["id"]:
         return True
@@ -418,7 +418,7 @@ async def update_permissions(
     doc = await documents.find_one({"id": doc_id}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    if user["role"] != "owner" and doc["owner_id"] != user["id"]:
+    if user["role"] not in ("owner", "admin") and doc["owner_id"] != user["id"]:
         raise HTTPException(status_code=403, detail="Forbidden")
     update: dict = {}
     if body.tags is not None:
@@ -446,7 +446,7 @@ async def delete_document(
     doc = await documents.find_one({"id": doc_id}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    if user["role"] != "owner" and doc["owner_id"] != user["id"]:
+    if user["role"] not in ("owner","admin") and doc["owner_id"] != user["id"]:
         raise HTTPException(status_code=403, detail="Forbidden")
 
     # Secure deletion: file, chunks, references in share links
@@ -485,7 +485,7 @@ async def reprocess_document(
     doc = await documents.find_one({"id": doc_id}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    if user["role"] != "owner" and doc["owner_id"] != user["id"]:
+    if user["role"] not in ("owner", "admin") and doc["owner_id"] != user["id"]:
         raise HTTPException(status_code=403, detail="Forbidden")
 
     disk_path = Path(doc["disk_path"])

@@ -72,7 +72,7 @@ async def create_share_link(
     # OR docs explicitly assigned to them by an Owner.
     if body.document_ids:
         doc_query: dict = {"id": {"$in": body.document_ids}}
-        if user["role"] != "owner":
+        if user["role"] not in ("owner", "admin"):
             doc_query["$or"] = [
                 {"owner_id": user["id"]},
                 {"assigned_to": user["id"]},
@@ -165,7 +165,7 @@ def _public_link(link: dict, filenames_by_id: Optional[dict] = None) -> dict:
 
 @router.get("", response_model=List[ShareLinkOut])
 async def list_share_links(user: dict = Depends(require_role(ROLE_EDITOR))):
-    query = {} if user["role"] == "owner" else {"owner_id": user["id"]}
+    query = {} if user["role"] in ("owner", "admin") else {"owner_id": user["id"]}
     links = await share_links.find(query, {"_id": 0, "password_hash": 0}).sort("created_at", -1).to_list(500)
     # Resolve filenames for display in the listing
     all_doc_ids = sorted({d for link in links for d in (link.get("document_ids") or [])})
@@ -187,7 +187,7 @@ async def revoke_share_link(
     link = await share_links.find_one({"token": token}, {"_id": 0})
     if not link:
         raise HTTPException(status_code=404, detail="Link not found")
-    if user["role"] != "owner" and link["owner_id"] != user["id"]:
+    if user["role"] not in ("owner","admin")  and link["owner_id"] != user["id"]:
         raise HTTPException(status_code=403, detail="Forbidden")
     await share_links.update_one({"token": token}, {"$set": {"revoked": True}})
     await log_event(
